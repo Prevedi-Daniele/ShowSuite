@@ -1,0 +1,48 @@
+{
+  "name": "showsuite",
+  "version": "1.0.0",
+  "description": "ShowSuite: Professional Cross-Platform Show Control & DMX Lighting Suite (QLab 5 & Lightkey reimplementation)",
+  "type": "module",
+  "main": "src/main/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "build": "vite build",
+    "build:renderer": "vite build",
+    "start": "electron .",
+    "start:lightkey": "electron . --standalone-lightkey",
+    "start:qlab": "electron . --standalone-qlab",
+    "test": "node test/runner.js",
+    "package:win": "npm run build && electron-builder --win",
+    "package:linux": "npm run build && electron-builder --linux",
+    "package:all": "npm run build && electron-builder -mwl"
+  },
+  "keywords": [
+    "qlab",
+    "lightkey",
+    "dmx",
+    "show-control",
+    "stage",
+    "theatre",
+    "lighting"
+  ],
+  "author": "ShowSuite Team",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "lucide-react": "^1.16.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "serialport": "^13.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.1",
+    "electron-builder": "^26.18.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "vite": "^6.0.7",
+    "wait-on": "^8.0.1"
+  }
+}

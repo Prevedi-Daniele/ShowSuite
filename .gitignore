@@ -1,0 +1,21 @@
+# Dipendenze
+node_modules/
+
+# Output di build
+dist/
+release/
+build/
+
+# Log
+*.log
+npm-debug.log*
+
+# File di sistema e IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# File temporanei
+*.tmp
+/manuali
