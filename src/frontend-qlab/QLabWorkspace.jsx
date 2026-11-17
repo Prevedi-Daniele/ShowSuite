@@ -405,34 +405,34 @@ export default function QLabWorkspace() {
 
   return (
     <div className="flex-1 flex flex-col bg-[#141416] text-mac-text overflow-hidden select-none">
-      {/* ══ QLab Toolbar Superiore ═══════════════════════════════════════════ */}
-      <div className="h-10 bg-[#1c1c20] border-b border-[#2d2d38] flex items-center justify-between px-3 shrink-0">
-        {/* Pulsanti Rapidi Nuove Cues */}
-        <div className="flex items-center space-x-1 overflow-x-auto">
+      {/* ══ QLab Toolbar Superiore — Dock Icone Cues QLab 5 ════════════════ */}
+      <div className="h-12 bg-[#18181c] border-b border-white/[0.08] flex items-center justify-between px-3 shrink-0">
+        {/* Pulsanti Rapidi Nuove Cues con Icona centrata e label fedele a QLab 5 */}
+        <div className="flex items-center space-x-1 overflow-x-auto py-1">
           {[
-            { type: CueType.GROUP, icon: FolderPlus, label: 'Group' },
-            { type: CueType.AUDIO, icon: Volume2, label: 'Audio' },
-            { type: CueType.MIC, icon: Mic, label: 'Mic' },
-            { type: CueType.VIDEO, icon: Video, label: 'Video' },
-            { type: CueType.TEXT, icon: FileText, label: 'Text' },
-            { type: CueType.FADE, icon: Sliders, label: 'Fade' },
-            { type: CueType.LIGHT, icon: Sparkles, label: 'Light' },
-            { type: CueType.NETWORK, icon: Send, label: 'Network' },
-            { type: CueType.MIDI, icon: Radio, label: 'MIDI' },
-            { type: CueType.TIMECODE, icon: Clock, label: 'Timecode' },
+            { type: CueType.GROUP, icon: FolderPlus, label: 'Group', color: '#7a79f5' },
+            { type: CueType.AUDIO, icon: Volume2, label: 'Audio', color: '#30d158' },
+            { type: CueType.MIC, icon: Mic, label: 'Mic', color: '#34c759' },
+            { type: CueType.VIDEO, icon: Video, label: 'Video', color: '#0a84ff' },
+            { type: CueType.TEXT, icon: FileText, label: 'Text', color: '#64d2ff' },
+            { type: CueType.FADE, icon: Sliders, label: 'Fade', color: '#ff9f0a' },
+            { type: CueType.LIGHT, icon: Sparkles, label: 'Light', color: '#ffd60a' },
+            { type: CueType.NETWORK, icon: Send, label: 'Network', color: '#bf5af2' },
+            { type: CueType.MIDI, icon: Radio, label: 'MIDI', color: '#ff375f' },
+            { type: CueType.TIMECODE, icon: Clock, label: 'Timecode', color: '#ff9f0a' },
           ].map((tool) => {
             const Icon = tool.icon;
             return (
-              <MacButton
+              <button
                 key={tool.type}
-                variant="toolbar"
-                size="sm"
-                icon={Icon}
+                type="button"
                 onClick={() => handleAddCue(tool.type)}
                 title={`Crea nuova ${tool.label} Cue`}
+                className="flex flex-col items-center justify-center px-2.5 py-1 rounded-[6px] hover:bg-white/[0.08] active:bg-white/[0.14] text-[#a1a1a6] hover:text-white transition-all duration-100 min-w-[50px] group border border-transparent hover:border-white/[0.06]"
               >
-                {tool.label}
-              </MacButton>
+                <Icon size={16} style={{ color: tool.color }} className="mb-0.5 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-medium leading-none tracking-tight">{tool.label}</span>
+              </button>
             );
           })}
         </div>
@@ -440,13 +440,13 @@ export default function QLabWorkspace() {
         {/* Destra: Switcher Cue List / Cue Cart & Config Colonne */}
         <div className="flex items-center space-x-2 shrink-0">
           {/* Switcher Modalità Workspace */}
-          <div className="flex bg-black/40 p-0.5 rounded border border-zinc-800 text-[11px]">
+          <div className="flex bg-[#141416] p-0.5 rounded-[6px] border border-white/[0.08] text-[11px]">
             <button
               onClick={() => setWorkspaceMode('cuelist')}
-              className={`px-2.5 py-1 rounded flex items-center gap-1.5 transition-colors ${
+              className={`px-2.5 py-1 rounded-[5px] flex items-center gap-1.5 transition-all ${
                 workspaceMode === 'cuelist'
-                  ? 'bg-mac-accent text-white font-semibold'
-                  : 'text-zinc-400 hover:text-white'
+                  ? 'bg-[#323238] text-white font-semibold shadow-sm border border-white/10'
+                  : 'text-[#8e8e93] hover:text-white'
               }`}
             >
               <List size={12} />
@@ -454,10 +454,10 @@ export default function QLabWorkspace() {
             </button>
             <button
               onClick={() => setWorkspaceMode('cart')}
-              className={`px-2.5 py-1 rounded flex items-center gap-1.5 transition-colors ${
+              className={`px-2.5 py-1 rounded-[5px] flex items-center gap-1.5 transition-all ${
                 workspaceMode === 'cart'
-                  ? 'bg-mac-accent text-white font-semibold'
-                  : 'text-zinc-400 hover:text-white'
+                  ? 'bg-[#323238] text-white font-semibold shadow-sm border border-white/10'
+                  : 'text-[#8e8e93] hover:text-white'
               }`}
             >
               <LayoutGrid size={12} />
@@ -465,10 +465,10 @@ export default function QLabWorkspace() {
             </button>
             <button
               onClick={() => setWorkspaceMode('stages')}
-              className={`px-2.5 py-1 rounded flex items-center gap-1.5 transition-colors ${
+              className={`px-2.5 py-1 rounded-[5px] flex items-center gap-1.5 transition-all ${
                 workspaceMode === 'stages'
-                  ? 'bg-mac-accent text-white font-semibold'
-                  : 'text-zinc-400 hover:text-white'
+                  ? 'bg-[#323238] text-white font-semibold shadow-sm border border-white/10'
+                  : 'text-[#8e8e93] hover:text-white'
               }`}
             >
               <Maximize2 size={12} />
@@ -482,7 +482,7 @@ export default function QLabWorkspace() {
               <button
                 type="button"
                 onClick={() => setIsColumnsMenuOpen(!isColumnsMenuOpen)}
-                className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                className="p-1.5 rounded-[5px] text-[#8e8e93] hover:text-white hover:bg-white/[0.08] transition-colors"
                 title="Configura Colonne Visibili"
               >
                 <Columns size={14} />
@@ -490,17 +490,17 @@ export default function QLabWorkspace() {
 
               {isColumnsMenuOpen && (
                 <div
-                  className="absolute right-0 top-8 w-44 bg-[#1c1c20] border border-[#2d2d38] rounded-lg shadow-2xl p-2 z-50 text-xs"
+                  className="absolute right-0 top-8 w-44 bg-[#1e1e24] border border-white/10 rounded-lg shadow-2xl p-2 z-50 text-xs"
                   onMouseLeave={() => setIsColumnsMenuOpen(false)}
                 >
-                  <div className="text-[10px] uppercase font-bold text-zinc-500 mb-1.5 px-1">Colonne Visibili</div>
+                  <div className="text-[10px] uppercase font-bold text-[#86868b] mb-1.5 px-1 tracking-wider">Colonne Visibili</div>
                   {Object.keys(columnsConfig).map((col) => (
-                    <label key={col} className="flex items-center space-x-2 px-1 py-0.5 hover:bg-white/5 rounded cursor-pointer">
+                    <label key={col} className="flex items-center space-x-2 px-1 py-1 hover:bg-white/[0.06] rounded cursor-pointer">
                       <input
                         type="checkbox"
                         checked={columnsConfig[col]}
                         onChange={(e) => setColumnsConfig({ ...columnsConfig, [col]: e.target.checked })}
-                        className="rounded bg-zinc-800 border-zinc-700 text-mac-accent focus:ring-0"
+                        className="rounded bg-zinc-800 border-zinc-700 text-[#0071e3] focus:ring-0"
                       />
                       <span className="capitalize text-zinc-300">{col}</span>
                     </label>
@@ -510,16 +510,16 @@ export default function QLabWorkspace() {
             </div>
           )}
 
-          <div className="h-4 w-[1px] bg-[#33333d]" />
-          <div className="flex items-center space-x-1.5 text-[11px] text-zinc-400">
-            <span className={`w-2 h-2 rounded-full ${runningCount > 0 ? 'bg-emerald-500 animate-ping' : 'bg-zinc-600'}`} />
+          <div className="h-4 w-[1px] bg-white/[0.08]" />
+          <div className="flex items-center space-x-1.5 text-[11px] text-[#8e8e93]">
+            <span className={`w-2 h-2 rounded-full ${runningCount > 0 ? 'bg-emerald-400 animate-ping' : 'bg-zinc-600'}`} />
             <span>{runningCount > 0 ? `${runningCount} Attive` : 'Standby'}</span>
           </div>
         </div>
       </div>
 
       {/* ══ QLab Transport Bar (Tasto GO Gigante & Pannello Controlli) ═══════ */}
-      <div className="h-24 bg-[#161619] border-b border-[#2d2d38] px-4 flex items-center justify-between shrink-0 shadow-lg relative">
+      <div className="h-24 bg-[#141417] border-b border-white/[0.08] px-4 flex items-center justify-between shrink-0 shadow-lg relative">
         {/* Sinistra: Tasto GO Gigante con Barra di Progresso Integrata */}
         <div className="flex items-center space-x-4">
           <div className="relative">
@@ -529,14 +529,14 @@ export default function QLabWorkspace() {
               icon={Play}
               onClick={handleGo}
               title="Esegui Cue in Standby (Barra Spaziatrice)"
-              className="shadow-2xl shadow-green-950/80 hover:scale-[1.02] active:scale-95 transition-all w-36 h-20 text-2xl"
+              className="w-36 h-20 text-2xl tracking-widest font-black"
             >
               GO
             </MacButton>
 
             {/* Barra di Progresso Dinamica sul Bordo Inferiore del GO */}
             {standbyCue && standbyCue.state === CueState.RUNNING && (
-              <div className="absolute -bottom-1 inset-x-0 h-1.5 bg-black/60 rounded-full overflow-hidden">
+              <div className="absolute -bottom-1 inset-x-0 h-1.5 bg-black/80 rounded-full overflow-hidden border border-emerald-500/40">
                 <div
                   className="h-full bg-emerald-400 transition-all duration-75 shadow-sm shadow-emerald-400"
                   style={{ width: `${Math.round(standbyProgress * 100)}%` }}
@@ -603,19 +603,19 @@ export default function QLabWorkspace() {
 
         {/* Centro: Display Standby Cue Grande e Visibile & Timecode HUD */}
         <div className="flex-1 max-w-xl mx-4 flex items-center space-x-3">
-          <div className="flex-1 px-4 py-2 bg-black/60 rounded-xl border border-[#33333d] flex flex-col justify-center shadow-inner">
-            <div className="flex items-center justify-between text-[10px] text-zinc-400 uppercase tracking-wider font-mono mb-0.5">
-              <span className="flex items-center space-x-1 text-amber-400 font-bold">
+          <div className="flex-1 px-4 py-2.5 bg-black/80 rounded-xl border border-white/[0.08] flex flex-col justify-center shadow-inner">
+            <div className="flex items-center justify-between text-[10px] text-[#86868b] uppercase tracking-wider font-mono mb-0.5">
+              <span className="flex items-center space-x-1 text-[#ffcc00] font-bold">
                 <span>● IN STANDBY:</span>
               </span>
-              <span>{standbyCue ? `Tipo: ${standbyCue.type.toUpperCase()}` : 'Coda vuota'}</span>
+              <span className="text-[#8e8e93]">{standbyCue ? `Tipo: ${standbyCue.type.toUpperCase()}` : 'Coda vuota'}</span>
             </div>
 
-            <div className="text-sm font-bold text-white truncate font-mono flex items-center space-x-2">
+            <div className="text-base font-bold text-white truncate font-mono flex items-center space-x-2">
               {standbyCue ? (
                 <>
-                  <span className="text-amber-400 font-extrabold">[{standbyCue.number || '-'}]</span>
-                  <span className="truncate">{standbyCue.name}</span>
+                  <span className="text-[#ffcc00] font-black">[{standbyCue.number || '-'}]</span>
+                  <span className="truncate text-[#f5f5f7]">{standbyCue.name}</span>
                 </>
               ) : (
                 <span className="text-zinc-600 font-normal">Nessuna Cue pronta all'avvio</span>
@@ -623,11 +623,11 @@ export default function QLabWorkspace() {
             </div>
 
             {standbyCue && (
-              <div className="flex items-center space-x-4 text-[10px] text-zinc-400 font-mono mt-1 pt-1 border-t border-zinc-800">
+              <div className="flex items-center space-x-4 text-[10px] text-[#8e8e93] font-mono mt-1 pt-1 border-t border-white/[0.06]">
                 <span>Pre: {standbyCue.preWait}s</span>
                 <span>Durata: {standbyCue.duration}s</span>
                 <span>Post: {standbyCue.postWait}s</span>
-                <span className="text-blue-400 capitalize">{standbyCue.continueMode.replace('_', ' ')}</span>
+                <span className="text-[#0a84ff] capitalize">{standbyCue.continueMode.replace('_', ' ')}</span>
               </div>
             )}
           </div>
@@ -642,13 +642,13 @@ export default function QLabWorkspace() {
         </div>
 
         {/* Destra: Orologio Show Time & Contatore Cues */}
-        <div className="text-right flex flex-col justify-center">
-          <div className="text-2xl font-mono font-bold text-zinc-100 tracking-wider">
+        <div className="text-right flex flex-col justify-center pr-2">
+          <div className="text-2xl font-mono font-bold text-[#f5f5f7] tracking-wider">
             {formatShowTime(elapsedShowTime)}
           </div>
-          <div className="text-[10px] text-zinc-400 font-mono flex items-center justify-end space-x-2">
+          <div className="text-[10px] text-[#86868b] font-mono flex items-center justify-end space-x-2">
             <span>Show Time</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
             <span className="text-zinc-300 font-semibold">{runningCount} Cue attive</span>
           </div>
         </div>

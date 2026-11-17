@@ -12,9 +12,9 @@
     "start:lightkey": "electron . --standalone-lightkey",
     "start:qlab": "electron . --standalone-qlab",
     "test": "node test/runner.js",
-    "package:win": "npm run build && electron-builder --win",
-    "package:linux": "npm run build && electron-builder --linux",
-    "package:all": "npm run build && electron-builder -mwl"
+    "package:win": "npm run build && electron-builder --win --publish never",
+    "package:linux": "npm run build && electron-builder --linux --publish never",
+    "package:all": "npm run build && electron-builder -mwl --publish never"
   },
   "keywords": [
     "qlab",
@@ -25,7 +25,14 @@
     "theatre",
     "lighting"
   ],
-  "author": "ShowSuite Team",
+  "author": {
+    "name": "ShowSuite Team",
+    "email": "dev@showsuite.app"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daniele/ShowSuite.git"
+  },
   "license": "Apache-2.0",
   "dependencies": {
     "lucide-react": "^1.16.0",

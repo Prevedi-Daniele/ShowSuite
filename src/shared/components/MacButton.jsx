@@ -1,8 +1,8 @@
 import React from 'react';
 
 /**
- * MacButton - Bottone in stile nativo macOS Dark
- * Varianti: 'default' (grigio neutro), 'primary' (blu Apple), 'qlab-go' (verde fluo), 'panic' (rosso scuro), 'toolbar' (flat per barre strumenti)
+ * MacButton - Bottone conforme all'Apple Human Interface Guidelines (macOS Dark)
+ * Supporta varianti native per controlli operativi di QLab 5 & Lightkey
  */
 export default function MacButton({
   children,
@@ -16,24 +16,41 @@ export default function MacButton({
   active = false,
 }) {
   const sizeClasses = {
-    sm: 'px-2 py-0.5 text-xs rounded-md h-6 min-w-[24px]',
-    md: 'px-3 py-1 text-xs rounded-md h-7 min-w-[28px]',
-    lg: 'px-4 py-2 text-sm rounded-lg h-9 min-w-[36px]',
-    huge: 'px-8 py-4 text-2xl font-bold rounded-xl h-20 min-w-[120px]', // per il tasto GO di QLab
+    xs: 'px-2 py-0.5 text-[10px] rounded h-5 min-w-[20px] gap-1',
+    sm: 'px-2.5 py-1 text-[11px] rounded-[5px] h-[26px] min-w-[26px] gap-1.5',
+    md: 'px-3 py-1.5 text-xs rounded-md h-7 min-w-[30px] gap-1.5',
+    lg: 'px-4 py-2 text-sm rounded-lg h-9 min-w-[36px] gap-2',
+    huge: 'px-6 py-3 text-2xl font-black rounded-xl h-20 min-w-[124px] gap-3', // QLab Giant GO
   };
 
   const variantClasses = {
-    default: `bg-gradient-to-b from-[#3a3a40] to-[#2e2e34] hover:from-[#45454c] hover:to-[#38383f] 
-      text-[#f4f4f5] border border-[#484850]/70 active:from-[#25252a] active:to-[#222226] shadow-sm`,
-    primary: `bg-gradient-to-b from-[#0a84ff] to-[#0071e3] hover:from-[#2292ff] hover:to-[#0a84ff] 
-      text-white border border-[#3ca2ff]/40 active:from-[#0062c4] active:to-[#0052a3] shadow-sm shadow-blue-900/30`,
-    'qlab-go': `bg-gradient-to-b from-[#30d158] to-[#248a3d] hover:from-[#3ce066] hover:to-[#2cb04b] 
-      text-black font-black tracking-wider border border-[#52e878]/50 active:from-[#1b6b2f] active:to-[#175c28] shadow-lg shadow-green-950/50`,
-    panic: `bg-gradient-to-b from-[#ff453a] to-[#d70015] hover:from-[#ff6961] hover:to-[#e00018] 
-      text-white font-bold border border-[#ff8580]/50 active:from-[#b30012] active:to-[#8f000e] shadow-lg shadow-red-950/50`,
-    toolbar: `bg-transparent hover:bg-white/10 text-mac-muted hover:text-white border border-transparent 
-      ${active ? 'bg-white/15 text-white border-mac-border/60 shadow-inner' : ''}`,
-    destructive: `bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30`,
+    // macOS Standard Button
+    default: `bg-[#2a2a30] hover:bg-[#34343c] active:bg-[#222227] text-[#f5f5f7] 
+      border border-white/10 shadow-mac-btn`,
+    
+    // Prominent Blue Action Button (Done, Save, Primary)
+    primary: `bg-[#0071e3] hover:bg-[#0077ed] active:bg-[#005bb5] text-white 
+      border border-blue-400/30 shadow-[0_1px_3px_rgba(0,113,227,0.4)] font-medium`,
+    
+    // QLab 5 Giant GO Button (Vibrant Apple Green Glow)
+    'qlab-go': `bg-gradient-to-b from-[#30d158] via-[#28cd41] to-[#22b339] 
+      hover:from-[#34c759] hover:to-[#28cd41] active:from-[#1ea833] active:to-[#1a8c2b]
+      text-[#051f0b] font-black tracking-wider border border-[#5ee67f]/60 shadow-qlab-go`,
+    
+    // QLab 5 Panic Button (Emergency Red)
+    panic: `bg-gradient-to-b from-[#ff453a] to-[#d70015] hover:from-[#ff5b52] hover:to-[#e00018]
+      active:from-[#b30012] active:to-[#8f000e] text-white font-bold border border-[#ff8580]/50 shadow-qlab-panic`,
+    
+    // Destructive / Stop Button
+    destructive: `bg-[#2a1717] hover:bg-[#3d1a1a] active:bg-[#1f1010] text-[#ff453a] 
+      border border-red-500/25`,
+
+    // Flat Toolbar Items (QLab Dock & Window Controls)
+    toolbar: `bg-transparent hover:bg-white/[0.08] active:bg-white/[0.14] text-[#a1a1a6] hover:text-[#f5f5f7] border border-transparent 
+      ${active ? 'bg-white/[0.12] text-white !border-white/15 shadow-inner' : ''}`,
+
+    // Segmented / Subtle Control
+    subtle: `bg-white/[0.04] hover:bg-white/[0.08] active:bg-white/[0.12] text-[#d1d1d6] border border-white/[0.06]`,
   };
 
   return (
@@ -42,16 +59,15 @@ export default function MacButton({
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       title={title}
-      className={`inline-flex items-center justify-center font-medium transition-all duration-75 select-none 
-        focus:outline-none focus:ring-1 focus:ring-mac-accent/70 active:scale-[0.98]
-        ${disabled ? 'opacity-40 cursor-not-allowed filter grayscale' : 'cursor-pointer'}
+      className={`inline-flex items-center justify-center font-medium transition-all duration-100 select-none 
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-mac-accent active:scale-[0.98]
+        ${disabled ? 'opacity-35 cursor-not-allowed pointer-events-none' : 'cursor-pointer'}
         ${sizeClasses[size] || sizeClasses.md}
         ${variantClasses[variant] || variantClasses.default}
-        ${className}
-      `}
+        ${className}`}
     >
-      {Icon && <Icon size={size === 'huge' ? 28 : size === 'sm' ? 12 : 14} className={children ? 'mr-1.5' : ''} />}
-      {children}
+      {Icon && <Icon size={size === 'huge' ? 26 : size === 'sm' || size === 'xs' ? 13 : 15} className="shrink-0" />}
+      {children && <span className="truncate">{children}</span>}
     </button>
   );
 }

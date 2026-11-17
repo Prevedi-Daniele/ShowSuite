@@ -40,6 +40,7 @@ import {
   ShieldOff,
   Tag,
   CornerDownRight,
+  Sparkles,
 } from 'lucide-react';
 
 const CUE_TYPE_ICONS = {
@@ -51,10 +52,10 @@ const CUE_TYPE_ICONS = {
   [CueType.CAMERA]: Video,
   [CueType.TEXT]: FileText,
   [CueType.FADE]: Sliders,
+  [CueType.LIGHT]: Sparkles,
   [CueType.NETWORK]: Send,
   [CueType.MIDI]: Radio,
   [CueType.TIMECODE]: Clock,
-  [CueType.LIGHT]: Sliders,
 };
 
 function formatTime(sec) {
@@ -143,20 +144,20 @@ export default function CueListTable({
           key={cue.id}
           onClick={() => onSelectCue(cue.id)}
           onDoubleClick={() => onGoCue(cue.id)}
-          className={`h-7 flex items-center text-xs select-none cursor-pointer border-b border-[#222228] transition-colors relative ${colorBorder} ${
+          className={`h-7 flex items-center text-xs select-none cursor-pointer border-b border-white/[0.04] transition-colors relative ${colorBorder} ${
             isStandby
-              ? 'bg-amber-500/15 ring-1 ring-amber-400 font-semibold text-white'
+              ? 'bg-[#ffcc00]/15 ring-1 ring-[#ffcc00]/80 font-semibold text-white'
               : isSelected
-              ? 'bg-white/10 text-white font-medium'
+              ? 'bg-[#0071e3]/30 text-white font-medium ring-1 ring-[#0071e3]/50'
               : isRunning
-              ? 'bg-emerald-500/10 text-emerald-200'
-              : 'hover:bg-white/5 text-zinc-300'
-          } ${!cue.armed ? 'opacity-50 line-through' : ''}`}
+              ? 'bg-emerald-500/15 text-emerald-200'
+              : 'hover:bg-white/[0.05] text-[#d1d1d6]'
+          } ${!cue.armed ? 'opacity-40 italic' : ''}`}
         >
-          {/* Cursore Standby Badge (Freccia Playhead) */}
+          {/* Cursore Standby Badge (Freccia Playhead QLab) */}
           <div className="w-6 flex items-center justify-center shrink-0">
             {isStandby && (
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shadow-sm shadow-amber-400" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#ffcc00] shadow-[0_0_8px_rgba(255,204,0,0.8)]" />
             )}
             {isRunning && (
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shadow-sm shadow-emerald-400" />

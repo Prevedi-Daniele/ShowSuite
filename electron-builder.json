@@ -4,7 +4,8 @@
   "productName": "ShowSuite",
   "npmRebuild": false,
   "directories": {
-    "output": "release"
+    "output": "release",
+    "buildResources": "build"
   },
   "files": [
     "dist/**/*",
@@ -44,6 +45,7 @@
       }
     ],
     "category": "AudioVideo",
+    "maintainer": "ShowSuite Team <dev@showsuite.app>",
     "icon": "build/icon.png"
   }
 }
