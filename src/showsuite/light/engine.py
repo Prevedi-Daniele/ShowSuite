@@ -1,18 +1,24 @@
 """LightEngine: progetto + mixer + programmer + uscite. Nessuna dipendenza dalla UI."""
 from __future__ import annotations
 
+import time
+
+from .beat import BeatClock
 from .dmx import Mixer, OutputManager
+from .live import LivePlayer
 from .fixtures import FixtureInstance
 from .project import OutputConfig, Project
 
 
 class LightEngine:
-    def __init__(self, project: Project | None = None):
+    def __init__(self, project: Project | None = None, now=time.monotonic):
         self.project = project or Project()
         self.mixer = Mixer()
         self.programmer = self.mixer.add_layer(100)  # valori impostati a mano
         self.values: dict[str, dict[str, int]] = {}  # fixture -> {canale: valore}
         self.output: OutputManager | None = None
+        self.beat = BeatClock(120.0, now)
+        self.live = LivePlayer(self, now)
 
     # --- valori ---
     def set_value(self, fixture: str, channel: str, value: int) -> None:
@@ -51,7 +57,7 @@ class LightEngine:
     # --- uscite ---
     def start_output(self) -> None:
         self.stop_output()
-        self.output = OutputManager(self.mixer)
+        self.output = OutputManager(self.mixer, pre_render=self.live.update)
         for cfg in self.project.outputs:
             self.output.route(cfg.universe, cfg.build())
         self.output.start()

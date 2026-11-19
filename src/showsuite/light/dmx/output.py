@@ -9,8 +9,9 @@ from .mixer import Mixer
 
 
 class OutputManager:
-    def __init__(self, mixer: Mixer, rate_hz: float = 44.0):
+    def __init__(self, mixer: Mixer, rate_hz: float = 44.0, pre_render=None):
         self.mixer = mixer
+        self.pre_render = pre_render  # chiamato prima di ogni frame (cue, effetti)
         self.rate_hz = rate_hz
         self.routes: list[tuple[int, OutputDriver]] = []  # (universo, driver)
         self.errors: list[tuple[OutputDriver, Exception]] = []
@@ -24,6 +25,8 @@ class OutputManager:
 
     def tick(self) -> None:
         """Un frame: render di ogni universo instradato e invio."""
+        if self.pre_render:
+            self.pre_render()
         frames: dict[int, bytes] = {}
         for universe, driver in self.routes:
             if id(driver) not in self._opened:
