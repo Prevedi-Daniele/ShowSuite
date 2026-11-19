@@ -7,3 +7,10 @@ Spec in `specs/`. Branch di lavoro: `main` (il codice Electron su `master` è se
 pip install -e .[dev]
 pytest
 ```
+
+## Avvio (sezione Light)
+```
+pip install -e .[ui,dev]
+python -m showsuite.light            # finestra Light
+python -m showsuite.light.tools.dmx_test opendmx COM3 1   # prova interfaccia USB (Linux: /dev/ttyUSB0)
+```

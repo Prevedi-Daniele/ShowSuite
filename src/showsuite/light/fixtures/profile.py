@@ -53,22 +53,30 @@ class FixtureInstance:
     profile: FixtureProfile
     universe: int
     address: int  # 1-512
+    x: float = 0.5  # posizione nel Preview (0-1)
+    y: float = 0.5
 
     @property
     def end_address(self) -> int:
         return self.address + self.profile.footprint - 1
 
-    def write(self, values: dict[str, int], target) -> None:
-        """Scrive i valori (per nome canale) in `target` (un Universe)."""
+    def channel_values(self, values: dict[str, int]) -> dict[int, int]:
+        """Converte {nome canale: valore} in {canale DMX: 0-255}."""
+        out: dict[int, int] = {}
         for name, v in values.items():
             base = self.address + self.profile.offset_of(name)
             ch = next(c for c in self.profile.channels if c.name == name)
             if ch.fine:
                 v = max(0, min(65535, int(v)))
-                target.set(base, v >> 8)
-                target.set(base + 1, v & 0xFF)
+                out[base], out[base + 1] = v >> 8, v & 0xFF
             else:
-                target.set(base, v)
+                out[base] = max(0, min(255, int(v)))
+        return out
+
+    def write(self, values: dict[str, int], target) -> None:
+        """Scrive i valori (per nome canale) in `target` (un Universe)."""
+        for ch, v in self.channel_values(values).items():
+            target.set(ch, v)
 
 
 class PatchError(ValueError):
