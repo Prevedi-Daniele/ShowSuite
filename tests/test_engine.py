@@ -8,6 +8,6 @@ def test_engine_values_and_color():
     e.set_value("P", "Green", 200)
     out = e.mixer.render(1)
     assert out[10] == 200 and out[9] == 0
-    assert e.fixture_color(fx) == (0, 200, 0)
+    assert e.fixture_color(fx) == (0, 200, 0)  # letto dall uscita reale
     e.remove_fixture("P")
     assert e.mixer.render(1)[10] == 0

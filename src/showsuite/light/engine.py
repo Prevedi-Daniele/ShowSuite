@@ -34,8 +34,15 @@ class LightEngine:
         return next(c.default for c in fx.profile.channels if c.name == channel)
 
     def clear_programmer(self) -> None:
-        self.programmer.values.clear()
+        self.programmer.clear()
         self.values.clear()
+
+    def release_programmer(self, fixture: str) -> None:
+        """Toglie dal programmer i valori di un fixture (es. dopo averli registrati in un cue)."""
+        fx = self.project.patch.find(fixture)
+        for ch in range(fx.address, fx.end_address + 1):
+            self.programmer.release(fx.universe, ch)
+        self.values.pop(fixture, None)
 
     def remove_fixture(self, fixture: str) -> None:
         fx = self.project.patch.find(fixture)
@@ -45,11 +52,16 @@ class LightEngine:
         self.project.patch.remove(fixture)
 
     def fixture_color(self, fx: FixtureInstance) -> tuple[int, int, int]:
-        """Colore indicativo per il Preview (0-255)."""
-        names = {c.name for c in fx.profile.channels}
-        dim = self.get_value(fx.name, "Dimmer") / 255 if "Dimmer" in names else 1.0
+        """Colore indicativo per il Preview, dall'uscita reale (programmer + cue)."""
+        data = self.mixer.render(fx.universe)
+        prof = fx.profile
+
+        def val(name):
+            return data[fx.address - 1 + prof.offset_of(name)]
+        names = {c.name for c in prof.channels}
+        dim = val("Dimmer") / 255 if "Dimmer" in names else 1.0
         if {"Red", "Green", "Blue"} <= names:
-            r, g, b = (self.get_value(fx.name, n) for n in ("Red", "Green", "Blue"))
+            r, g, b = val("Red"), val("Green"), val("Blue")
         else:
             r = g = b = 255
         return int(r * dim), int(g * dim), int(b * dim)

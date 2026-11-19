@@ -29,3 +29,26 @@ def test_output_build_types():
     assert pj.OutputConfig("sacn", 1).build() is not None
     with pytest.raises(ValueError):
         pj.OutputConfig("boh", 1).build()
+
+
+def test_roundtrip_cues_palettes_and_v1(tmp_path):
+    import json, zipfile
+    from showsuite.light.effects import Effect
+    from showsuite.light.live import LiveCue
+    from showsuite.light.preset import Palette, Preset
+    p = pj.Project("C")
+    p.patch.add(FixtureInstance("A", generic_rgb(), 1, 1))
+    p.palettes.append(Palette("Colori", [Preset("Rosso", {"Red": 255})]))
+    p.cues.append(LiveCue("Chase", ["A"], Preset("x", {"Blue": 9}), [Effect("Red", "saw", fan=0.5)],
+                          fade_in=1.5, curve="s_curve", priority=20))
+    f = tmp_path / "c.showsuite-light"
+    pj.save(p, str(f))
+    q = pj.load(str(f))
+    assert q.palettes[0].get("Rosso").values == {"Red": 255}
+    c = q.cues[0]
+    assert c.fade_in == 1.5 and c.curve == "s_curve" and c.effects[0].fan == 0.5 and c.preset.values == {"Blue": 9}
+    # file v1 (senza palette/cue) ancora leggibile
+    f1 = tmp_path / "v1.showsuite-light"
+    with zipfile.ZipFile(f1, "w") as z:
+        z.writestr("project.json", json.dumps({"schema_version": 1, "name": "Old", "fixtures": [], "outputs": []}))
+    assert pj.load(str(f1)).cues == []

@@ -7,9 +7,13 @@ import zipfile
 from dataclasses import dataclass, field
 
 from .dmx.drivers import ArtNetDriver, OpenDmxDriver, OutputDriver, SacnDriver
+from .effects import Effect
 from .fixtures import ChannelDef, FixtureInstance, FixtureProfile, Patch
+from .live import LiveCue
+from .preset import Palette, Preset
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+SUPPORTED_VERSIONS = (1, 2)  # la v1 non ha palette/cue
 MAX_UNIVERSES = 16
 
 
@@ -35,6 +39,23 @@ class Project:
     name: str = "Senza titolo"
     patch: Patch = field(default_factory=Patch)
     outputs: list[OutputConfig] = field(default_factory=list)
+    palettes: list[Palette] = field(default_factory=list)
+    cues: list[LiveCue] = field(default_factory=list)
+
+
+def _cue_to_dict(c: LiveCue) -> dict:
+    return {"name": c.name, "fixtures": c.fixtures, "fade_in": c.fade_in, "fade_out": c.fade_out,
+            "curve": c.curve, "priority": c.priority, "toggle": c.toggle,
+            "preset": ({"name": c.preset.name, "values": c.preset.values} if c.preset else None),
+            "effects": [vars(e) for e in c.effects]}
+
+
+def _cue_from_dict(d: dict) -> LiveCue:
+    pr = d.get("preset")
+    return LiveCue(d["name"], d["fixtures"], Preset(pr["name"], pr["values"]) if pr else None,
+                   [Effect(**e) for e in d.get("effects", [])], d.get("fade_in", 0.0),
+                   d.get("fade_out", 0.0), d.get("curve", "linear"), d.get("priority", 10),
+                   d.get("toggle", True))
 
 
 def _profile_id(p: FixtureProfile) -> str:
@@ -62,7 +83,10 @@ def save(project: Project, path: str) -> None:
                          "address": f.address, "x": f.x, "y": f.y})
     doc = {"schema_version": SCHEMA_VERSION, "name": project.name, "fixtures": fixtures,
            "outputs": [{"type": o.type, "universe": o.universe, "params": o.params}
-                       for o in project.outputs]}
+                       for o in project.outputs],
+           "palettes": [{"name": p.name, "presets": [{"name": x.name, "values": x.values}
+                                                     for x in p.presets]} for p in project.palettes],
+           "cues": [_cue_to_dict(c) for c in project.cues]}
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("project.json", json.dumps(doc, indent=2, ensure_ascii=False))
         for pid, prof in profiles.items():
@@ -73,7 +97,7 @@ def load(path: str) -> Project:
     with zipfile.ZipFile(path) as z:
         doc = json.loads(z.read("project.json"))
         ver = doc.get("schema_version")
-        if ver != SCHEMA_VERSION:
+        if ver not in SUPPORTED_VERSIONS:
             raise ValueError(f"versione progetto non supportata: {ver}")
         profiles = {n.split("/")[-1][:-5]: _profile_from_dict(json.loads(z.read(n)))
                     for n in z.namelist() if n.startswith("profiles/") and n.endswith(".json")}
@@ -83,4 +107,7 @@ def load(path: str) -> Project:
                                        f["address"], f.get("x", 0.5), f.get("y", 0.5)))
     proj.outputs = [OutputConfig(o["type"], o["universe"], o.get("params", {}))
                     for o in doc["outputs"]]
+    proj.palettes = [Palette(p["name"], [Preset(x["name"], x["values"]) for x in p["presets"]])
+                     for p in doc.get("palettes", [])]
+    proj.cues = [_cue_from_dict(c) for c in doc.get("cues", [])]
     return proj

@@ -5,12 +5,15 @@ import sys
 
 from PySide6.QtCore import QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QBrush, QColor, QPainter, QPen
-from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
-                               QFormLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QDialog, QDialogButtonBox,
+                               QDockWidget, QDoubleSpinBox, QFileDialog, QFormLayout, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QMainWindow, QMessageBox, QPushButton, QScrollArea, QSlider,
                                QSpinBox, QSplitter, QVBoxLayout, QWidget)
 
 from ..light import project as pj
+from ..light.effects import WAVES, Effect
+from ..light.live import CURVES, LiveCue
+from ..light.preset import Preset
 from ..light.engine import LightEngine
 from ..light.fixtures import FixtureInstance, PatchError, generic_dimmer, generic_rgb
 
@@ -205,6 +208,84 @@ class OutputsDialog(QDialog):
             self._reload()
 
 
+class RecordCueDialog(QDialog):
+    """Registra un cue dai fixture selezionati e dai valori nel programmer."""
+
+    def __init__(self, engine: LightEngine, fixtures: list[str], parent=None):
+        super().__init__(parent)
+        self.engine, self.fixtures = engine, fixtures
+        self.setWindowTitle(f"Nuovo cue ({len(fixtures)} fixture)")
+        f = QFormLayout(self)
+        self.name = QLineEdit(f"Cue {len(engine.project.cues) + 1}")
+        chans = sorted({c.name for n in fixtures for c in engine.project.patch.find(n).profile.channels})
+        self.eff = QComboBox(); self.eff.addItems(["nessuno", *WAVES, "random"])
+        self.chan = QComboBox(); self.chan.addItems(chans)
+        self.cycle = QDoubleSpinBox(); self.cycle.setRange(0.125, 64); self.cycle.setValue(1.0)
+        self.fan = QDoubleSpinBox(); self.fan.setRange(0, 1); self.fan.setSingleStep(0.1)
+        self.fin = QDoubleSpinBox(); self.fin.setRange(0, 60)
+        self.fout = QDoubleSpinBox(); self.fout.setRange(0, 60)
+        self.curve = QComboBox(); self.curve.addItems(list(CURVES))
+        self.prio = QSpinBox(); self.prio.setRange(1, 99); self.prio.setValue(10)
+        for lab, w in (("Nome", self.name), ("Effetto", self.eff), ("Canale effetto", self.chan),
+                       ("Battute per ciclo", self.cycle), ("Fanning (0-1)", self.fan),
+                       ("Fade in (s)", self.fin), ("Fade out (s)", self.fout),
+                       ("Curva", self.curve), ("Priorità", self.prio)):
+            f.addRow(lab, w)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept); bb.rejected.connect(self.reject)
+        f.addRow(bb)
+
+    def build(self) -> LiveCue:
+        values: dict[str, int] = {}
+        for n in self.fixtures:
+            for ch, v in self.engine.values.get(n, {}).items():
+                values.setdefault(ch, v)
+        effects = []
+        if self.eff.currentText() != "nessuno":
+            effects.append(Effect(self.chan.currentText(), self.eff.currentText(),
+                                  self.cycle.value(), fan=self.fan.value()))
+        return LiveCue(self.name.text() or "Cue", list(self.fixtures),
+                       Preset(self.name.text(), values) if values else None, effects,
+                       self.fin.value(), self.fout.value(), self.curve.currentText(), self.prio.value())
+
+
+class LiveDock(QWidget):
+    """Pulsanti cue, BPM e tap tempo."""
+
+    def __init__(self, engine: LightEngine):
+        super().__init__()
+        self.engine = engine
+        v = QVBoxLayout(self)
+        top = QHBoxLayout()
+        self.bpm = QDoubleSpinBox(); self.bpm.setRange(20, 400); self.bpm.setValue(engine.beat.bpm)
+        self.bpm.valueChanged.connect(lambda x: engine.beat.set_bpm(x))
+        tap = QPushButton("Tap"); tap.clicked.connect(self._tap)
+        top.addWidget(QLabel("BPM")); top.addWidget(self.bpm); top.addWidget(tap); top.addStretch()
+        v.addLayout(top)
+        self.grid_w = QWidget(); self.grid = QGridLayout(self.grid_w)
+        v.addWidget(self.grid_w); v.addStretch()
+        self.buttons: dict[str, QPushButton] = {}
+
+    def _tap(self):
+        self.engine.beat.tap()
+        self.bpm.blockSignals(True); self.bpm.setValue(self.engine.beat.bpm); self.bpm.blockSignals(False)
+
+    def rebuild(self):
+        for b in self.buttons.values():
+            b.setParent(None)
+        self.buttons.clear()
+        for i, cue in enumerate(self.engine.project.cues):
+            b = QPushButton(cue.name); b.setMinimumHeight(48); b.setCheckable(True)
+            b.clicked.connect(lambda _=False, c=cue: self.engine.live.trigger(c))
+            self.grid.addWidget(b, i // 6, i % 6)
+            self.buttons[cue.name] = b
+
+    def sync(self):
+        for name, b in self.buttons.items():
+            st = self.engine.live.active.get(name)
+            b.setChecked(bool(st and not st["releasing"]))
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -213,6 +294,10 @@ class MainWindow(QMainWindow):
         self.preview = PreviewWidget(self.engine)
         self.faders = FaderPanel(self.engine)
         self.fixlist = QListWidget()
+        self.fixlist.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.livedock = LiveDock(self.engine)
+        dock = QDockWidget("Live", self); dock.setWidget(self.livedock)
+        self.addDockWidget(Qt.BottomDockWidgetArea, dock)
         self.preview.selected.connect(self._select)
         self.fixlist.currentTextChanged.connect(self._select_from_list)
         split = QSplitter()
@@ -241,6 +326,7 @@ class MainWindow(QMainWindow):
         p = self.menuBar().addMenu("Patch")
         act(p, "Aggiungi fixture…", self.add_fixture); act(p, "Rimuovi selezionato", self.remove_fixture)
         act(p, "Azzera valori", self.clear_values)
+        act(p, "Registra cue dalla selezione…", self.record_cue, "Ctrl+R")
         o = self.menuBar().addMenu("Uscite"); act(o, "Configura uscite…", self.outputs)
 
     def _retitle(self):
@@ -281,6 +367,18 @@ class MainWindow(QMainWindow):
     def clear_values(self):
         self.engine.clear_programmer(); self.faders.show_fixture(self.preview.current)
 
+    def record_cue(self):
+        names = [i.text() for i in self.fixlist.selectedItems()]
+        if not names:
+            QMessageBox.information(self, "Cue", "Seleziona uno o più fixture nell'elenco Patch.")
+            return
+        d = RecordCueDialog(self.engine, names, self)
+        if d.exec() == QDialog.Accepted:
+            self.engine.project.cues.append(d.build())
+            for n in names:   # i valori sono ora nel cue: svuota il programmer per questi fixture
+                self.engine.release_programmer(n)
+            self.livedock.rebuild(); self.faders.show_fixture(self.preview.current)
+
     def outputs(self):
         OutputsDialog(self.engine, self).exec()
         if self.out_btn.isChecked():
@@ -294,6 +392,9 @@ class MainWindow(QMainWindow):
             self.engine.stop_output()
 
     def _tick(self):
+        if not self.engine.output:
+            self.engine.live.update()  # senza output il Preview deve comunque muoversi
+        self.livedock.sync()
         self.preview.update()
         errs = self.engine.output_errors()
         self.statusBar().showMessage(errs[-1] if errs else "")
@@ -304,6 +405,7 @@ class MainWindow(QMainWindow):
         self.engine.project = proj
         self.engine.clear_programmer()
         self.faders.show_fixture(None); self._retitle(); self._refresh_list()
+        self.engine.live.active.clear(); self.livedock.rebuild()
 
     def new(self):
         self.path = None; self._load_into_engine(pj.Project())

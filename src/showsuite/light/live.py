@@ -38,6 +38,10 @@ class LivePlayer:
         self._layers: dict[int, object] = {}
 
     def trigger(self, cue: LiveCue) -> None:
+        with self.engine.mixer.lock:
+            self._trigger(cue)
+
+    def _trigger(self, cue: LiveCue) -> None:
         st = self.active.get(cue.name)
         if st and cue.toggle and not st["releasing"]:
             return self.release(cue)
@@ -60,9 +64,13 @@ class LivePlayer:
         return f(min(1.0, (now - st["t0"]) / cue.fade_in))
 
     def update(self) -> None:
+        with self.engine.mixer.lock:
+            self._update()
+
+    def _update(self) -> None:
         """Ricalcola i layer del mixer da zero in base ai cue attivi."""
         for layer in self._layers.values():
-            layer.values.clear()
+            layer.clear()
         beats = self.engine.beat.beats()
         patch = self.engine.project.patch
         for name in list(self.active):

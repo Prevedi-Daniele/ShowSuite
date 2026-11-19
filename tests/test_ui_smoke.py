@@ -19,3 +19,25 @@ def test_window_add_and_fader():
     w.faders.sliders[0].findChildren(type(w.faders.sliders[0].findChildren(__import__("PySide6.QtWidgets", fromlist=["QSlider"]).QSlider)[0]))[0].setValue(255)
     assert w.engine.mixer.render(1)[3] == 255  # Par 2 @4, Red
     w.close()
+
+
+def test_record_and_trigger_cue():
+    from PySide6.QtWidgets import QApplication
+    from showsuite.ui.light_window import AddFixtureDialog, MainWindow, RecordCueDialog
+    app = QApplication.instance() or QApplication([])
+    w = MainWindow()
+    d = AddFixtureDialog(w.engine, w); d.prof.setCurrentIndex(1); d.count.setValue(2); d.create()
+    w._refresh_list()
+    w.engine.set_value("Fixture 1", "Red", 200)
+    rd = RecordCueDialog(w.engine, ["Fixture 1", "Fixture 2"], w)
+    rd.name.setText("Rosso")
+    cue = rd.build()
+    w.engine.project.cues.append(cue)
+    for n in ("Fixture 1", "Fixture 2"):
+        w.engine.release_programmer(n)
+    w.livedock.rebuild()
+    assert w.engine.mixer.render(1)[0] == 0
+    w.livedock.buttons["Rosso"].click()
+    w.engine.live.update()
+    assert w.engine.mixer.render(1)[0] == 200 and w.engine.mixer.render(1)[3] == 200
+    w.close()
