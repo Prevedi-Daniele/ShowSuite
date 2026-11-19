@@ -41,3 +41,18 @@ def test_record_and_trigger_cue():
     w.engine.live.update()
     assert w.engine.mixer.render(1)[0] == 200 and w.engine.mixer.render(1)[3] == 200
     w.close()
+
+
+def test_sequence_recording_ui():
+    from PySide6.QtWidgets import QApplication
+    from showsuite.ui.light_window import AddFixtureDialog, MainWindow
+    app = QApplication.instance() or QApplication([])
+    w = MainWindow()
+    d = AddFixtureDialog(w.engine, w); d.prof.setCurrentIndex(1); d.count.setValue(2); d.create()
+    w._refresh_list()
+    w.fixlist.selectAll()
+    for v in (10, 200):
+        w.engine.set_value("Fixture 1", "Red", v)
+        w.add_step()
+    assert [s.values["Red"] for s in w._seq_steps] == [10, 200] and not w.engine.values
+    w.close()

@@ -26,6 +26,11 @@ class LiveCue:
     curve: str = "linear"
     priority: int = 10          # più alto vince (come Mixer.Layer)
     toggle: bool = True
+    # Sequenza: se `steps` non è vuoto i preset si alternano a tempo di battuta
+    steps: list[Preset] = field(default_factory=list)
+    beats_per_step: float = 1.0
+    crossfade: float = 0.0      # frazione dello step (0-1) usata per sfumare verso il successivo
+    loop: bool = True
 
 
 class LivePlayer:
@@ -45,7 +50,8 @@ class LivePlayer:
         st = self.active.get(cue.name)
         if st and cue.toggle and not st["releasing"]:
             return self.release(cue)
-        self.active[cue.name] = {"cue": cue, "t0": self._now(), "releasing": False, "t1": 0.0}
+        self.active[cue.name] = {"cue": cue, "t0": self._now(), "releasing": False, "t1": 0.0,
+                                 "b0": self.engine.beat.beats()}
 
     def release(self, cue: LiveCue) -> None:
         st = self.active.get(cue.name)
@@ -62,6 +68,25 @@ class LivePlayer:
         if cue.fade_in <= 0:
             return 1.0
         return f(min(1.0, (now - st["t0"]) / cue.fade_in))
+
+    @staticmethod
+    def _step_values(cue: LiveCue, st: dict, beats: float) -> dict[str, float]:
+        n = len(cue.steps)
+        pos = max(0.0, (beats - st["b0"]) / cue.beats_per_step)
+        idx = int(pos)
+        frac = pos - idx
+        if not cue.loop and idx >= n:
+            return dict(cue.steps[-1].values)
+        cur, nxt = cue.steps[idx % n], cue.steps[(idx + 1) % n]
+        out = dict(cur.values)
+        if cue.crossfade > 0 and (cue.loop or idx + 1 < n):
+            start = 1.0 - cue.crossfade
+            if frac > start:
+                t = (frac - start) / cue.crossfade
+                for ch in set(cur.values) | set(nxt.values):
+                    a, b = cur.values.get(ch, 0), nxt.values.get(ch, 0)
+                    out[ch] = a + (b - a) * t
+        return out
 
     def update(self) -> None:
         with self.engine.mixer.lock:
@@ -87,6 +112,10 @@ class LivePlayer:
             if cue.preset:
                 for fx_name in cue.fixtures:
                     for ch, v in cue.preset.values.items():
+                        values.append((fx_name, ch, v))
+            if cue.steps:
+                for fx_name in cue.fixtures:
+                    for ch, v in self._step_values(cue, st, beats).items():
                         values.append((fx_name, ch, v))
             for eff in cue.effects:
                 for fx_name, v in eff.evaluate(cue.fixtures, beats).items():

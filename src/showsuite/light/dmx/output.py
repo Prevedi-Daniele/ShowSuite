@@ -9,9 +9,10 @@ from .mixer import Mixer
 
 
 class OutputManager:
-    def __init__(self, mixer: Mixer, rate_hz: float = 44.0, pre_render=None, post_render=None):
+    def __init__(self, mixer: Mixer, rate_hz: float = 44.0, pre_render=None, post_render=None, render=None):
         self.mixer = mixer
         self.post_render = post_render  # (universo, dati) -> dati: master, blackout, freeze
+        self.render = render or mixer.render  # (universo) -> 512 byte; l'engine lo usa per il blind
         self.pre_render = pre_render  # chiamato prima di ogni frame (cue, effetti)
         self.rate_hz = rate_hz
         self.routes: list[tuple[int, OutputDriver]] = []  # (universo, driver)
@@ -38,7 +39,7 @@ class OutputManager:
                     self.errors.append((driver, e))
                     continue
             if universe not in frames:
-                data = self.mixer.render(universe)
+                data = self.render(universe)
                 frames[universe] = self.post_render(universe, data) if self.post_render else data
             data = frames[universe]
             try:

@@ -6,7 +6,7 @@ import sys
 from PySide6.QtCore import QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QBrush, QColor, QPainter, QPen
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QDialog, QDialogButtonBox,
-                               QDockWidget, QDoubleSpinBox, QFileDialog, QFormLayout, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+                               QCheckBox, QDockWidget, QDoubleSpinBox, QFileDialog, QFormLayout, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QMainWindow, QMessageBox, QPushButton, QScrollArea, QSlider,
                                QSpinBox, QSplitter, QVBoxLayout, QWidget)
 
@@ -247,6 +247,24 @@ class RecordCueDialog(QDialog):
                        self.fin.value(), self.fout.value(), self.curve.currentText(), self.prio.value())
 
 
+class SequenceDialog(QDialog):
+    def __init__(self, n_steps: int, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Nuova sequenza ({n_steps} step)")
+        f = QFormLayout(self)
+        self.name = QLineEdit("Sequenza")
+        self.bps = QDoubleSpinBox(); self.bps.setRange(0.125, 64); self.bps.setValue(1.0)
+        self.xf = QDoubleSpinBox(); self.xf.setRange(0, 1); self.xf.setSingleStep(0.1)
+        self.loop = QCheckBox("Ripeti"); self.loop.setChecked(True)
+        self.prio = QSpinBox(); self.prio.setRange(1, 99); self.prio.setValue(10)
+        for lab, w in (("Nome", self.name), ("Battute per step", self.bps),
+                       ("Crossfade (0-1)", self.xf), ("", self.loop), ("Priorità", self.prio)):
+            f.addRow(lab, w)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept); bb.rejected.connect(self.reject)
+        f.addRow(bb)
+
+
 class LiveDock(QWidget):
     """Pulsanti cue, BPM e tap tempo."""
 
@@ -268,7 +286,10 @@ class LiveDock(QWidget):
         self.bo.toggled.connect(lambda on: setattr(engine, "blackout", on))
         self.fr = QPushButton("Freeze"); self.fr.setCheckable(True)
         self.fr.toggled.connect(engine.set_freeze)
-        top.addWidget(self.bo); top.addWidget(self.fr); top.addStretch()
+        self.bl = QPushButton("Blind"); self.bl.setCheckable(True)
+        self.bl.setToolTip("Le modifiche del programmer non vanno in uscita")
+        self.bl.toggled.connect(lambda on: setattr(engine, "blind", on))
+        top.addWidget(self.bo); top.addWidget(self.fr); top.addWidget(self.bl); top.addStretch()
         v.addLayout(top)
         self.grid_w = QWidget(); self.grid = QGridLayout(self.grid_w)
         v.addWidget(self.grid_w); v.addStretch()
@@ -299,6 +320,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.engine = LightEngine()
         self.path: str | None = None
+        self._seq_steps: list[Preset] = []
+        self._seq_fixtures: list[str] = []
         self.preview = PreviewWidget(self.engine)
         self.faders = FaderPanel(self.engine)
         self.fixlist = QListWidget()
@@ -336,6 +359,8 @@ class MainWindow(QMainWindow):
         act(p, "Importa profilo OFL…", self.import_ofl)
         act(p, "Azzera valori", self.clear_values)
         act(p, "Registra cue dalla selezione…", self.record_cue, "Ctrl+R")
+        act(p, "Sequenza: aggiungi step dai valori", self.add_step, "Ctrl+Shift+R")
+        act(p, "Sequenza: termina e crea cue…", self.finish_sequence)
         o = self.menuBar().addMenu("Uscite"); act(o, "Configura uscite…", self.outputs)
 
     def _retitle(self):
@@ -398,6 +423,42 @@ class MainWindow(QMainWindow):
             for n in names:   # i valori sono ora nel cue: svuota il programmer per questi fixture
                 self.engine.release_programmer(n)
             self.livedock.rebuild(); self.faders.show_fixture(self.preview.current)
+
+    def add_step(self):
+        names = [i.text() for i in self.fixlist.selectedItems()] or self._seq_fixtures
+        if not names:
+            QMessageBox.information(self, "Sequenza", "Seleziona i fixture nell'elenco Patch.")
+            return
+        if self._seq_fixtures and set(names) != set(self._seq_fixtures):
+            QMessageBox.warning(self, "Sequenza", "Gli step devono usare gli stessi fixture. "
+                                "Termina la sequenza in corso o riseleziona gli stessi fixture.")
+            return
+        values: dict[str, int] = {}
+        for n in names:
+            for ch, v in self.engine.values.get(n, {}).items():
+                values.setdefault(ch, v)
+        if not values:
+            QMessageBox.information(self, "Sequenza", "Imposta almeno un valore coi fader prima.")
+            return
+        self._seq_fixtures = names
+        self._seq_steps.append(Preset(f"Step {len(self._seq_steps) + 1}", values))
+        for n in names:
+            self.engine.release_programmer(n)
+        self.faders.show_fixture(self.preview.current)
+        self.statusBar().showMessage(f"Sequenza: {len(self._seq_steps)} step registrati", 5000)
+
+    def finish_sequence(self):
+        if len(self._seq_steps) < 2:
+            QMessageBox.information(self, "Sequenza", "Servono almeno 2 step (Ctrl+Shift+R).")
+            return
+        d = SequenceDialog(len(self._seq_steps), self)
+        if d.exec() == QDialog.Accepted:
+            self.engine.project.cues.append(LiveCue(
+                d.name.text() or "Sequenza", self._seq_fixtures, steps=self._seq_steps,
+                beats_per_step=d.bps.value(), crossfade=d.xf.value(), loop=d.loop.isChecked(),
+                priority=d.prio.value()))
+            self._seq_steps, self._seq_fixtures = [], []
+            self.livedock.rebuild()
 
     def outputs(self):
         OutputsDialog(self.engine, self).exec()

@@ -71,3 +71,29 @@ def test_effect_cue_follows_beat():
     c.t = 0.5; e.live.update()
     out = e.mixer.render(1)
     assert out[0] == 128 and out[3] == round(255 * 0.75)
+
+
+def test_sequence_steps_crossfade_and_loop():
+    from showsuite.light.preset import Preset as P
+    e, c = make()
+    e.beat.set_bpm(60)
+    seq = LiveCue("Seq", ["P0"], steps=[P("a", {"Red": 100}), P("b", {"Red": 200})],
+                  beats_per_step=2.0, crossfade=0.5)
+    e.live.trigger(seq)
+    c.t = 0.5; e.live.update(); assert e.mixer.render(1)[0] == 100    # step 1
+    c.t = 1.5; e.live.update(); assert e.mixer.render(1)[0] == 150    # a metà del crossfade
+    c.t = 2.5; e.live.update(); assert e.mixer.render(1)[0] == 200    # step 2
+    c.t = 4.5; e.live.update(); assert e.mixer.render(1)[0] == 100    # loop
+    seq2 = LiveCue("Once", ["P1"], steps=[P("a", {"Red": 10}), P("b", {"Red": 20})],
+                   beats_per_step=1.0, loop=False)
+    e.live.trigger(seq2)
+    c.t = 20; e.live.update(); assert e.mixer.render(1)[3] == 20      # resta sull'ultimo
+
+
+def test_blind_hides_programmer_from_output():
+    e, c = make()
+    e.set_value("P0", "Red", 200)
+    e.blind = True
+    assert e.render_output(1)[0] == 0 and e.mixer.render(1)[0] == 200  # preview sì, uscita no
+    e.blind = False
+    assert e.render_output(1)[0] == 200

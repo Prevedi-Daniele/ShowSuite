@@ -52,3 +52,15 @@ def test_roundtrip_cues_palettes_and_v1(tmp_path):
     with zipfile.ZipFile(f1, "w") as z:
         z.writestr("project.json", json.dumps({"schema_version": 1, "name": "Old", "fixtures": [], "outputs": []}))
     assert pj.load(str(f1)).cues == []
+
+
+def test_sequence_roundtrip(tmp_path):
+    from showsuite.light.live import LiveCue
+    from showsuite.light.preset import Preset
+    p = pj.Project("S")
+    p.cues.append(LiveCue("Seq", ["A"], steps=[Preset("a", {"Red": 1}), Preset("b", {"Red": 2})],
+                          beats_per_step=0.5, crossfade=0.25, loop=False))
+    f = tmp_path / "s.showsuite-light"
+    pj.save(p, str(f))
+    c = pj.load(str(f)).cues[0]
+    assert [x.values["Red"] for x in c.steps] == [1, 2] and c.beats_per_step == 0.5 and not c.loop

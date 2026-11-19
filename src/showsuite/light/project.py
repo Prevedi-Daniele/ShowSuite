@@ -47,7 +47,9 @@ def _cue_to_dict(c: LiveCue) -> dict:
     return {"name": c.name, "fixtures": c.fixtures, "fade_in": c.fade_in, "fade_out": c.fade_out,
             "curve": c.curve, "priority": c.priority, "toggle": c.toggle,
             "preset": ({"name": c.preset.name, "values": c.preset.values} if c.preset else None),
-            "effects": [vars(e) for e in c.effects]}
+            "effects": [vars(e) for e in c.effects],
+            "steps": [{"name": x.name, "values": x.values} for x in c.steps],
+            "beats_per_step": c.beats_per_step, "crossfade": c.crossfade, "loop": c.loop}
 
 
 def _cue_from_dict(d: dict) -> LiveCue:
@@ -55,7 +57,9 @@ def _cue_from_dict(d: dict) -> LiveCue:
     return LiveCue(d["name"], d["fixtures"], Preset(pr["name"], pr["values"]) if pr else None,
                    [Effect(**e) for e in d.get("effects", [])], d.get("fade_in", 0.0),
                    d.get("fade_out", 0.0), d.get("curve", "linear"), d.get("priority", 10),
-                   d.get("toggle", True))
+                   d.get("toggle", True),
+                   [Preset(x["name"], x["values"]) for x in d.get("steps", [])],
+                   d.get("beats_per_step", 1.0), d.get("crossfade", 0.0), d.get("loop", True))
 
 
 def _profile_id(p: FixtureProfile) -> str:

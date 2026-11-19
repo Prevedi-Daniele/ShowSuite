@@ -43,10 +43,12 @@ class Mixer:
             self.layers.sort(key=lambda l: l.priority)
         return layer
 
-    def render(self, universe: int) -> bytes:
+    def render(self, universe: int, skip=()) -> bytes:
         out = bytearray(DMX_CHANNELS)
         with self.lock:
             for layer in self.layers:  # dal meno al più prioritario: l'ultimo vince
+                if layer in skip:
+                    continue
                 for ch, v in layer.values.get(universe, {}).items():
                     out[ch - 1] = v
         return bytes(out)

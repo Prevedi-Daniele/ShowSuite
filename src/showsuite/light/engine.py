@@ -19,6 +19,7 @@ class LightEngine:
         self.output: OutputManager | None = None
         self.beat = BeatClock(120.0, now)
         self.library: dict = {"Dimmer generico (1 ch)": generic_dimmer(), "RGB generico (3 ch)": generic_rgb()}
+        self.blind = False   # se attivo il programmer non va in uscita (resta nel Preview)
         self.grand_master = 1.0
         self.blackout = False
         self.freeze = False
@@ -95,6 +96,9 @@ class LightEngine:
                 out.setdefault(fx.universe, []).append(fx.address + prof.offset_of(k.name))
         return out
 
+    def render_output(self, universe: int) -> bytes:
+        return self.mixer.render(universe, skip={self.programmer} if self.blind else ())
+
     def process(self, universe: int, data: bytes) -> bytes:
         """Ultimo stadio prima delle uscite: freeze, grand master, blackout."""
         if self.freeze and universe in self._frozen:
@@ -116,7 +120,8 @@ class LightEngine:
     # --- uscite ---
     def start_output(self) -> None:
         self.stop_output()
-        self.output = OutputManager(self.mixer, pre_render=self.live.update, post_render=self.process)
+        self.output = OutputManager(self.mixer, pre_render=self.live.update, post_render=self.process,
+                                    render=self.render_output)
         for cfg in self.project.outputs:
             self.output.route(cfg.universe, cfg.build())
         self.output.start()
