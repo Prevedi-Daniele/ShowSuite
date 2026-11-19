@@ -11,6 +11,7 @@ class ChannelDef:
     name: str            # es. "Dimmer", "Red", "Pan"
     default: int = 0     # valore a riposo (0-255, o 0-65535 se fine=True)
     fine: bool = False   # occupa 2 canali (16 bit, MSB poi LSB)
+    kind: str = ""       # "intensity" | "red" | "green" | "blue" | "white" | "amber" | "uv" | ""
 
     @property
     def width(self) -> int:
@@ -28,6 +29,9 @@ class FixtureProfile:
     def footprint(self) -> int:
         return sum(c.width for c in self.channels)
 
+    def channel_of_kind(self, kind: str) -> ChannelDef | None:
+        return next((c for c in self.channels if c.kind == kind), None)
+
     def offset_of(self, name: str) -> int:
         """Offset (0-based) del primo canale con quel nome."""
         off = 0
@@ -39,12 +43,13 @@ class FixtureProfile:
 
 
 def generic_dimmer() -> FixtureProfile:
-    return FixtureProfile("Generic", "Dimmer", "1ch", (ChannelDef("Dimmer"),))
+    return FixtureProfile("Generic", "Dimmer", "1ch", (ChannelDef("Dimmer", kind="intensity"),))
 
 
 def generic_rgb() -> FixtureProfile:
     return FixtureProfile("Generic", "RGB", "3ch",
-                          (ChannelDef("Red"), ChannelDef("Green"), ChannelDef("Blue")))
+                          (ChannelDef("Red", kind="red"), ChannelDef("Green", kind="green"),
+                           ChannelDef("Blue", kind="blue")))
 
 
 @dataclass

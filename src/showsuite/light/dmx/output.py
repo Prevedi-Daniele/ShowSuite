@@ -9,8 +9,9 @@ from .mixer import Mixer
 
 
 class OutputManager:
-    def __init__(self, mixer: Mixer, rate_hz: float = 44.0, pre_render=None):
+    def __init__(self, mixer: Mixer, rate_hz: float = 44.0, pre_render=None, post_render=None):
         self.mixer = mixer
+        self.post_render = post_render  # (universo, dati) -> dati: master, blackout, freeze
         self.pre_render = pre_render  # chiamato prima di ogni frame (cue, effetti)
         self.rate_hz = rate_hz
         self.routes: list[tuple[int, OutputDriver]] = []  # (universo, driver)
@@ -36,7 +37,10 @@ class OutputManager:
                 except Exception as e:  # un'interfaccia guasta non blocca le altre
                     self.errors.append((driver, e))
                     continue
-            data = frames.setdefault(universe, self.mixer.render(universe))
+            if universe not in frames:
+                data = self.mixer.render(universe)
+                frames[universe] = self.post_render(universe, data) if self.post_render else data
+            data = frames[universe]
             try:
                 driver.send(universe, data)
             except Exception as e:

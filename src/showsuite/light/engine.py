@@ -6,7 +6,7 @@ import time
 from .beat import BeatClock
 from .dmx import Mixer, OutputManager
 from .live import LivePlayer
-from .fixtures import FixtureInstance
+from .fixtures import FixtureInstance, generic_dimmer, generic_rgb
 from .project import OutputConfig, Project
 
 
@@ -18,6 +18,11 @@ class LightEngine:
         self.values: dict[str, dict[str, int]] = {}  # fixture -> {canale: valore}
         self.output: OutputManager | None = None
         self.beat = BeatClock(120.0, now)
+        self.library: dict = {"Dimmer generico (1 ch)": generic_dimmer(), "RGB generico (3 ch)": generic_rgb()}
+        self.grand_master = 1.0
+        self.blackout = False
+        self.freeze = False
+        self._frozen: dict[int, bytes] = {}
         self.live = LivePlayer(self, now)
 
     # --- valori ---
@@ -56,20 +61,62 @@ class LightEngine:
         data = self.mixer.render(fx.universe)
         prof = fx.profile
 
-        def val(name):
-            return data[fx.address - 1 + prof.offset_of(name)]
-        names = {c.name for c in prof.channels}
-        dim = val("Dimmer") / 255 if "Dimmer" in names else 1.0
-        if {"Red", "Green", "Blue"} <= names:
-            r, g, b = val("Red"), val("Green"), val("Blue")
-        else:
+        def val(kind):
+            c = prof.channel_of_kind(kind)
+            return data[fx.address - 1 + prof.offset_of(c.name)] if c else None
+        dim = val("intensity")
+        dim = 1.0 if dim is None else dim / 255
+        r, g, b = val("red"), val("green"), val("blue")
+        if r is None and g is None and b is None:
             r = g = b = 255
+        r, g, b = (r or 0), (g or 0), (b or 0)
+        w = val("white") or 0
+        r, g, b = min(255, r + w), min(255, g + w), min(255, b + w)
         return int(r * dim), int(g * dim), int(b * dim)
+
+    def import_ofl(self, path: str) -> int:
+        """Importa un file OFL nella libreria; restituisce quante modalità ha aggiunto."""
+        from .fixtures.ofl import load_ofl
+        profiles = load_ofl(path)
+        for p in profiles:
+            self.library[f"{p.manufacturer} {p.model} — {p.mode} ({p.footprint} ch)".strip()] = p
+        return len(profiles)
+
+    # --- master / blackout / freeze ---
+    def _intensity_channels(self) -> dict[int, list[int]]:
+        """universo -> canali DMX da scalare con il Grand Master (intensità, o colori se manca)."""
+        out: dict[int, list[int]] = {}
+        for fx in self.project.patch.fixtures:
+            prof = fx.profile
+            c = prof.channel_of_kind("intensity")
+            kinds = [c] if c else [k for k in (prof.channel_of_kind(x) for x in
+                                              ("red", "green", "blue", "white", "amber", "uv")) if k]
+            for k in kinds:
+                out.setdefault(fx.universe, []).append(fx.address + prof.offset_of(k.name))
+        return out
+
+    def process(self, universe: int, data: bytes) -> bytes:
+        """Ultimo stadio prima delle uscite: freeze, grand master, blackout."""
+        if self.freeze and universe in self._frozen:
+            return self._frozen[universe]
+        gm = 0.0 if self.blackout else self.grand_master
+        if gm < 1.0:
+            buf = bytearray(data)
+            for ch in self._intensity_channels().get(universe, ()):
+                buf[ch - 1] = round(buf[ch - 1] * gm)
+            data = bytes(buf)
+        if self.freeze:
+            self._frozen[universe] = data
+        return data
+
+    def set_freeze(self, on: bool) -> None:
+        self._frozen = {}
+        self.freeze = on   # il primo frame dopo l'attivazione viene mantenuto
 
     # --- uscite ---
     def start_output(self) -> None:
         self.stop_output()
-        self.output = OutputManager(self.mixer, pre_render=self.live.update)
+        self.output = OutputManager(self.mixer, pre_render=self.live.update, post_render=self.process)
         for cfg in self.project.outputs:
             self.output.route(cfg.universe, cfg.build())
         self.output.start()

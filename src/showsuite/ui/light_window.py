@@ -15,10 +15,8 @@ from ..light.effects import WAVES, Effect
 from ..light.live import CURVES, LiveCue
 from ..light.preset import Preset
 from ..light.engine import LightEngine
-from ..light.fixtures import FixtureInstance, PatchError, generic_dimmer, generic_rgb
-
-PROFILES = {"Dimmer generico (1 ch)": generic_dimmer, "RGB generico (3 ch)": generic_rgb}
-
+from ..light.fixtures import FixtureInstance, PatchError
+from ..light.fixtures.ofl import OflImportError
 
 class PreviewWidget(QWidget):
     selected = Signal(str)
@@ -120,7 +118,7 @@ class AddFixtureDialog(QDialog):
         self.engine = engine
         self.setWindowTitle("Aggiungi fixture")
         f = QFormLayout(self)
-        self.prof = QComboBox(); self.prof.addItems(PROFILES)
+        self.prof = QComboBox(); self.prof.addItems(engine.library)
         self.name = QLineEdit("Fixture")
         self.count = QSpinBox(); self.count.setRange(1, 128); self.count.setValue(1)
         self.uni = QSpinBox(); self.uni.setRange(1, pj.MAX_UNIVERSES); self.uni.setValue(1)
@@ -132,7 +130,7 @@ class AddFixtureDialog(QDialog):
 
     def create(self) -> int:
         """Crea i fixture agli indirizzi liberi; restituisce quanti ne ha aggiunti."""
-        profile = PROFILES[self.prof.currentText()]()
+        profile = self.engine.library[self.prof.currentText()]
         added = 0
         patch = self.engine.project.patch
         existing = len(patch.fixtures)
@@ -260,7 +258,17 @@ class LiveDock(QWidget):
         self.bpm = QDoubleSpinBox(); self.bpm.setRange(20, 400); self.bpm.setValue(engine.beat.bpm)
         self.bpm.valueChanged.connect(lambda x: engine.beat.set_bpm(x))
         tap = QPushButton("Tap"); tap.clicked.connect(self._tap)
-        top.addWidget(QLabel("BPM")); top.addWidget(self.bpm); top.addWidget(tap); top.addStretch()
+        top.addWidget(QLabel("BPM")); top.addWidget(self.bpm); top.addWidget(tap)
+        top.addSpacing(20); top.addWidget(QLabel("Master"))
+        self.master = QSlider(Qt.Horizontal); self.master.setRange(0, 100); self.master.setValue(100)
+        self.master.setMinimumWidth(160)
+        self.master.valueChanged.connect(lambda x: setattr(engine, "grand_master", x / 100))
+        top.addWidget(self.master)
+        self.bo = QPushButton("Blackout"); self.bo.setCheckable(True)
+        self.bo.toggled.connect(lambda on: setattr(engine, "blackout", on))
+        self.fr = QPushButton("Freeze"); self.fr.setCheckable(True)
+        self.fr.toggled.connect(engine.set_freeze)
+        top.addWidget(self.bo); top.addWidget(self.fr); top.addStretch()
         v.addLayout(top)
         self.grid_w = QWidget(); self.grid = QGridLayout(self.grid_w)
         v.addWidget(self.grid_w); v.addStretch()
@@ -325,6 +333,7 @@ class MainWindow(QMainWindow):
         act(m, "Salva", self.save, "Ctrl+S"); act(m, "Salva con nome…", self.save_as)
         p = self.menuBar().addMenu("Patch")
         act(p, "Aggiungi fixture…", self.add_fixture); act(p, "Rimuovi selezionato", self.remove_fixture)
+        act(p, "Importa profilo OFL…", self.import_ofl)
         act(p, "Azzera valori", self.clear_values)
         act(p, "Registra cue dalla selezione…", self.record_cue, "Ctrl+R")
         o = self.menuBar().addMenu("Uscite"); act(o, "Configura uscite…", self.outputs)
@@ -363,6 +372,17 @@ class MainWindow(QMainWindow):
             self.engine.remove_fixture(n)
             self.preview.current = None
             self.faders.show_fixture(None); self._refresh_list()
+
+    def import_ofl(self):
+        files, _ = QFileDialog.getOpenFileNames(self, "Importa profili OFL", "", "Fixture OFL (*.json)")
+        total = 0
+        for f in files:
+            try:
+                total += self.engine.import_ofl(f)
+            except (OflImportError, OSError, KeyError) as e:
+                QMessageBox.warning(self, "Importa profilo", f"{f}\n{e}")
+        if files:
+            self.statusBar().showMessage(f"Importate {total} modalità", 5000)
 
     def clear_values(self):
         self.engine.clear_programmer(); self.faders.show_fixture(self.preview.current)
