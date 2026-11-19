@@ -10,7 +10,7 @@ from .dmx.drivers import ArtNetDriver, OpenDmxDriver, OutputDriver, SacnDriver
 from .effects import Effect
 from .fixtures import ChannelDef, FixtureInstance, FixtureProfile, Patch
 from .control.midi import MidiMapping
-from .live import LiveButton, LiveCue, LivePage
+from .live import CueList, CueListStep, LiveButton, LiveCue, LivePage
 from .preset import Palette, Preset
 
 SCHEMA_VERSION = 2
@@ -53,7 +53,8 @@ def _cue_to_dict(c: LiveCue) -> dict:
             "preset": ({"name": c.preset.name, "values": c.preset.values} if c.preset else None),
             "effects": [vars(e) for e in c.effects],
             "steps": [{"name": x.name, "values": x.values} for x in c.steps],
-            "beats_per_step": c.beats_per_step, "crossfade": c.crossfade, "loop": c.loop}
+            "beats_per_step": c.beats_per_step, "crossfade": c.crossfade, "loop": c.loop,
+            "speed": c.speed, "dimmer": c.dimmer}
 
 
 def _cue_from_dict(d: dict) -> LiveCue:
@@ -63,7 +64,8 @@ def _cue_from_dict(d: dict) -> LiveCue:
                    d.get("fade_out", 0.0), d.get("curve", "linear"), d.get("priority", 10),
                    d.get("toggle", True),
                    [Preset(x["name"], x["values"]) for x in d.get("steps", [])],
-                   d.get("beats_per_step", 1.0), d.get("crossfade", 0.0), d.get("loop", True))
+                   d.get("beats_per_step", 1.0), d.get("crossfade", 0.0), d.get("loop", True),
+                   d.get("speed", 1.0), d.get("dimmer", 1.0))
 
 
 def _profile_id(p: FixtureProfile) -> str:
@@ -97,7 +99,9 @@ def save(project: Project, path: str) -> None:
                                                      for x in p.presets]} for p in project.palettes],
            "cues": [_cue_to_dict(c) for c in project.cues],
            "pages": [{"name": p.name, "priority": p.priority, "fade_time": p.fade_time,
-                      "columns": p.columns, "buttons": [vars(b) for b in p.buttons]}
+                      "columns": p.columns, "buttons": [vars(b) for b in p.buttons],
+                      "cuelist": ({"name": p.cuelist.name, "loop": p.cuelist.loop, "priority": p.cuelist.priority,
+                                   "steps": [vars(x) for x in p.cuelist.steps]} if p.cuelist else None)}
                      for p in project.pages],
            "midi_mappings": [vars(m) for m in project.midi_mappings], "osc_port": project.osc_port}
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
@@ -126,7 +130,10 @@ def load(path: str) -> Project:
                      for p in doc.get("palettes", [])]
     proj.cues = [_cue_from_dict(c) for c in doc.get("cues", [])]
     proj.pages = [LivePage(p["name"], [LiveButton(**b) for b in p.get("buttons", [])], p.get("priority", 0),
-                           p.get("fade_time", 0.0), p.get("columns", 6)) for p in doc.get("pages", [])]
+                           p.get("fade_time", 0.0), p.get("columns", 6),
+                           (CueList(p["cuelist"]["name"], [CueListStep(**x) for x in p["cuelist"]["steps"]],
+                                    p["cuelist"].get("loop", False), p["cuelist"].get("priority", 10))
+                            if p.get("cuelist") else None)) for p in doc.get("pages", [])]
     if not proj.pages and proj.cues:   # progetti senza pagine: tutti i cue su una pagina
         proj.pages = [LivePage("Pagina 1", [LiveButton(c.name) for c in proj.cues])]
     proj.midi_mappings = [MidiMapping(**m) for m in doc.get("midi_mappings", [])]

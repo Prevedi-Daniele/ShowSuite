@@ -112,3 +112,89 @@ def test_page_priority_and_flash_start():
     e.live.update(); assert e.mixer.render(1)[3] == 90 and not e.live.active["f"]["releasing"]
     e.set_value("P0", "Red", 7)
     assert e.mixer.render(1)[0] == 7            # il programmer vince su tutto
+
+
+def _cl_engine():
+    from showsuite.light.fixtures import ChannelDef, FixtureProfile
+    from showsuite.light.live import CueList, CueListStep, LivePage
+    e, c = make()
+    mover = FixtureProfile("X", "M", "m", (ChannelDef("Dimmer", kind="intensity"), ChannelDef("Pan")))
+    e.project.patch.add(FixtureInstance("M", mover, 1, 20))
+    e.project.cues += [LiveCue("A", ["P0"], Preset("a", {"Red": 100})),
+                       LiveCue("B", ["P0"], Preset("b", {"Red": 200})),
+                       LiveCue("C", ["P0"], Preset("c", {"Green": 50}))]
+    cl = CueList("L", [CueListStep("A", hold=None, fade=0.0),
+                       CueListStep("B", hold=1.0, fade=2.0),
+                       CueListStep("C", skip=True),
+                       CueListStep("A", hold=None)])
+    e.project.pages.append(LivePage("p", cuelist=cl))
+    return e, c, cl
+
+
+def test_cuelist_go_crossfade_auto_follow_skip_loop():
+    e, c, cl = _cl_engine()
+    assert e.live.go(cl) and e.live.current_step(cl) == 1
+    e.live.update(); assert e.mixer.render(1)[0] == 100
+    e.live.go(cl)                                   # step 2: crossfade A->B in 2s
+    c.t = 1.0; e.live.update()
+    assert e.mixer.render(1)[0] == 100   # a metà: B (200*0.5) ha la precedenza su A (100*0.5)
+    c.t = 2.0; e.live.update()
+    assert e.mixer.render(1)[0] == 200 and "A" not in e.live.active
+    # auto-follow: hold 1s dopo il fade (t=2+1) -> salta lo step skip e va al 4
+    c.t = 3.1; e.live.update()
+    assert e.live.current_step(cl) == 4
+    c.t = 10; e.live.update()                        # step 4 ha hold manuale: resta
+    assert e.live.current_step(cl) == 4
+    assert e.live.go(cl) is False and e.live.current_step(cl) is None   # fine lista, senza loop
+    e.live.update(); c.t = 11; e.live.update()
+    assert e.mixer.render(1)[0] == 0
+    cl.loop = True
+    e.live.go(cl); assert e.live.current_step(cl) == 1
+    e.live.goto(cl, 3)                               # goto entra anche negli step skip
+    assert e.live.current_step(cl) == 3
+    import pytest as _p
+    with _p.raises(IndexError):
+        e.live.goto(cl, 9)
+
+
+def test_cuelist_same_cue_continuity_and_stop():
+    from showsuite.light.live import CueList, CueListStep
+    e, c, cl = _cl_engine()
+    same = CueList("S", [CueListStep("A"), CueListStep("A")])
+    e.project.pages[0].cuelist = same
+    e.live.go(same); t0 = e.live.active["A"]["t0"]
+    c.t = 5.0; e.live.go(same)
+    assert e.live.active["A"]["t0"] == t0           # nessun riavvio tra step con lo stesso cue
+    e.live.stop_cuelist(same); e.live.update(); c.t = 6; e.live.update()
+    assert not e.live.active
+
+
+def test_fade_only_scales_intensity_not_position():
+    e, c, cl = _cl_engine()
+    cue = LiveCue("Mv", ["M"], Preset("m", {"Dimmer": 200, "Pan": 180}), fade_in=2.0)
+    e.live.trigger(cue); c.t = 1.0; e.live.update()
+    out = e.mixer.render(1)
+    assert out[19] == 100 and out[20] == 180        # dimmer a metà fade, pan già in posizione
+
+
+def test_modifiers_speed_and_dimmer():
+    e, c, cl = _cl_engine()
+    e.beat.set_bpm(60)
+    cue = LiveCue("W", ["P0"], effects=[Effect("Red", "saw")], speed=2.0, dimmer=0.5)
+    e.live.trigger(cue)
+    c.t = 0.25; e.live.update()
+    # saw a velocità doppia: fase 0.5 -> 128, poi dimmer 0.5 sul colore (fixture RGB senza dimmer)
+    assert e.mixer.render(1)[0] == round(128 * 0.5)
+    cue.speed = 1.0                                   # cambio velocità senza salti di fase
+    c.t = 0.5; e.live.update()
+    assert e.mixer.render(1)[0] == round(round(255 * 0.75) * 0.5)
+
+
+def test_cuelist_roundtrip(tmp_path):
+    from showsuite.light import project as pj
+    e, c, cl = _cl_engine()
+    e.project.cues[0].speed = 1.5
+    f = tmp_path / "cl.showsuite-light"; pj.save(e.project, str(f)); q = pj.load(str(f))
+    got = q.pages[0].cuelist
+    assert [s.cue for s in got.steps] == ["A", "B", "C", "A"] and got.steps[2].skip and got.steps[1].hold == 1.0
+    assert q.cues[0].speed == 1.5
