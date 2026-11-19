@@ -56,3 +56,17 @@ def test_sequence_recording_ui():
         w.add_step()
     assert [s.values["Red"] for s in w._seq_steps] == [10, 200] and not w.engine.values
     w.close()
+
+
+def test_control_dialog_osc_toggle():
+    from PySide6.QtWidgets import QApplication
+    from showsuite.ui.light_window import ControlDialog, MainWindow
+    app = QApplication.instance() or QApplication([])
+    w = MainWindow()
+    d = ControlDialog(w)
+    d.osc_port.setValue(23456)
+    d._toggle_osc()
+    assert w.osc is not None
+    d._toggle_osc()
+    assert w.osc is None
+    d.close(); w.close()

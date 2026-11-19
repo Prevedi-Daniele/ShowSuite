@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from .dmx.drivers import ArtNetDriver, OpenDmxDriver, OutputDriver, SacnDriver
 from .effects import Effect
 from .fixtures import ChannelDef, FixtureInstance, FixtureProfile, Patch
+from .control.midi import MidiMapping
 from .live import LiveCue
 from .preset import Palette, Preset
 
@@ -41,6 +42,8 @@ class Project:
     outputs: list[OutputConfig] = field(default_factory=list)
     palettes: list[Palette] = field(default_factory=list)
     cues: list[LiveCue] = field(default_factory=list)
+    midi_mappings: list[MidiMapping] = field(default_factory=list)
+    osc_port: int = 21600
 
 
 def _cue_to_dict(c: LiveCue) -> dict:
@@ -90,7 +93,8 @@ def save(project: Project, path: str) -> None:
                        for o in project.outputs],
            "palettes": [{"name": p.name, "presets": [{"name": x.name, "values": x.values}
                                                      for x in p.presets]} for p in project.palettes],
-           "cues": [_cue_to_dict(c) for c in project.cues]}
+           "cues": [_cue_to_dict(c) for c in project.cues],
+           "midi_mappings": [vars(m) for m in project.midi_mappings], "osc_port": project.osc_port}
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("project.json", json.dumps(doc, indent=2, ensure_ascii=False))
         for pid, prof in profiles.items():
@@ -114,4 +118,6 @@ def load(path: str) -> Project:
     proj.palettes = [Palette(p["name"], [Preset(x["name"], x["values"]) for x in p["presets"]])
                      for p in doc.get("palettes", [])]
     proj.cues = [_cue_from_dict(c) for c in doc.get("cues", [])]
+    proj.midi_mappings = [MidiMapping(**m) for m in doc.get("midi_mappings", [])]
+    proj.osc_port = doc.get("osc_port", 21600)
     return proj

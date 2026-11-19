@@ -11,6 +11,9 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QDial
                                QSpinBox, QSplitter, QVBoxLayout, QWidget)
 
 from ..light import project as pj
+from ..light.control.actions import ACTIONS, ActionRunner
+from ..light.control.midi import MidiController
+from ..light.control.osc import OscServer
 from ..light.effects import WAVES, Effect
 from ..light.live import CURVES, LiveCue
 from ..light.preset import Preset
@@ -315,11 +318,123 @@ class LiveDock(QWidget):
             b.setChecked(bool(st and not st["releasing"]))
 
 
+class ControlDialog(QDialog):
+    """OSC (porta) e MIDI (porta, mappature, MIDI-learn)."""
+
+    def __init__(self, win: "MainWindow"):
+        super().__init__(win)
+        self.win = win
+        self.setWindowTitle("Controllo esterno")
+        self.resize(520, 520)
+        v = QVBoxLayout(self)
+        # OSC
+        orow = QHBoxLayout()
+        self.osc_port = QSpinBox(); self.osc_port.setRange(1024, 65535); self.osc_port.setValue(win.engine.project.osc_port)
+        self.osc_btn = QPushButton("Ferma OSC" if win.osc else "Avvia OSC"); self.osc_btn.clicked.connect(self._toggle_osc)
+        orow.addWidget(QLabel("OSC porta")); orow.addWidget(self.osc_port); orow.addWidget(self.osc_btn); orow.addStretch()
+        v.addLayout(orow)
+        # MIDI
+        mrow = QHBoxLayout()
+        self.ports = QComboBox(); self.ports.addItems(MidiController.list_ports())
+        self.m_btn = QPushButton("Apri MIDI"); self.m_btn.clicked.connect(self._open_midi)
+        mrow.addWidget(QLabel("MIDI")); mrow.addWidget(self.ports, 1); mrow.addWidget(self.m_btn)
+        v.addLayout(mrow)
+        if not self.ports.count():
+            v.addWidget(QLabel("Nessuna porta MIDI (serve: pip install showsuite[midi] e il controller collegato)."))
+        # learn
+        f = QFormLayout()
+        self.action = QComboBox(); self.action.addItems(ACTIONS)
+        self.arg1 = QComboBox(); self.arg1.setEditable(True)
+        self.arg2 = QComboBox(); self.arg2.setEditable(True)
+        self.action.currentTextChanged.connect(self._fill_args)
+        f.addRow("Azione", self.action); f.addRow("Cue / fixture", self.arg1); f.addRow("Canale", self.arg2)
+        v.addLayout(f)
+        self.learn_btn = QPushButton("Impara (poi tocca un pad o gira una manopola)")
+        self.learn_btn.clicked.connect(self._learn)
+        v.addWidget(self.learn_btn)
+        self.list = QListWidget(); v.addWidget(self.list)
+        rem = QPushButton("Rimuovi mappatura"); rem.clicked.connect(self._remove); v.addWidget(rem)
+        self.status = QLabel(""); v.addWidget(self.status)
+        self._fill_args(self.action.currentText()); self._reload()
+        self.t = QTimer(self); self.t.timeout.connect(self._poll); self.t.start(200)
+
+    def _fill_args(self, action):
+        e = self.win.engine
+        self.arg1.clear(); self.arg2.clear()
+        self.arg1.setEnabled(action in ("cue", "fixture")); self.arg2.setEnabled(action == "fixture")
+        if action == "cue":
+            self.arg1.addItems([c.name for c in e.project.cues])
+        elif action == "fixture":
+            self.arg1.addItems([f.name for f in e.project.patch.fixtures])
+            self.arg1.currentTextChanged.connect(self._fill_channels)
+            self._fill_channels(self.arg1.currentText())
+
+    def _fill_channels(self, name):
+        self.arg2.clear()
+        try:
+            self.arg2.addItems([c.name for c in self.win.engine.project.patch.find(name).profile.channels])
+        except KeyError:
+            pass
+
+    def _toggle_osc(self):
+        w = self.win
+        if w.osc:
+            w.osc.stop(); w.osc = None
+        else:
+            try:
+                w.engine.project.osc_port = self.osc_port.value()
+                w.osc = OscServer(w.runner, self.osc_port.value()); w.osc.start()
+            except OSError as e:
+                w.osc = None
+                QMessageBox.warning(self, "OSC", f"Impossibile aprire la porta: {e}")
+        self.osc_btn.setText("Ferma OSC" if w.osc else "Avvia OSC")
+
+    def _open_midi(self):
+        try:
+            self.win.midi.open(self.ports.currentText())
+            self.status.setText(f"MIDI aperto: {self.ports.currentText()}")
+        except Exception as e:
+            QMessageBox.warning(self, "MIDI", str(e))
+
+    def _learn(self):
+        a = self.action.currentText()
+        args = {}
+        if a == "cue":
+            args = {"cue": self.arg1.currentText()}
+        elif a == "fixture":
+            args = {"fixture": self.arg1.currentText(), "channel": self.arg2.currentText()}
+        if a in ("cue", "fixture") and not all(args.values()):
+            QMessageBox.information(self, "MIDI", "Scegli cue o fixture/canale."); return
+        self.win.midi.learn(a, args)
+        self.learn_btn.setText("In attesa di un messaggio MIDI…")
+
+    def _poll(self):
+        if not self.win.midi.learning and self.learn_btn.text().startswith("In attesa"):
+            self.learn_btn.setText("Impara (poi tocca un pad o gira una manopola)")
+            self._reload()
+
+    def _reload(self):
+        self.list.clear()
+        for m in self.win.midi.mappings:
+            self.list.addItem(f"{m.kind} ch{m.channel + 1} #{m.number} → {m.action} {m.args or ''}")
+
+    def _remove(self):
+        i = self.list.currentRow()
+        if i >= 0:
+            del self.win.midi.mappings[i]; self._reload()
+
+    def done(self, r):
+        self.t.stop(); self.win.midi.cancel_learn(); super().done(r)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.engine = LightEngine()
         self.path: str | None = None
+        self.runner = ActionRunner(self.engine)
+        self.midi = MidiController(self.runner, self.engine.project.midi_mappings)
+        self.osc: OscServer | None = None
         self._seq_steps: list[Preset] = []
         self._seq_fixtures: list[str] = []
         self.preview = PreviewWidget(self.engine)
@@ -362,6 +477,7 @@ class MainWindow(QMainWindow):
         act(p, "Sequenza: aggiungi step dai valori", self.add_step, "Ctrl+Shift+R")
         act(p, "Sequenza: termina e crea cue…", self.finish_sequence)
         o = self.menuBar().addMenu("Uscite"); act(o, "Configura uscite…", self.outputs)
+        c = self.menuBar().addMenu("Controllo"); act(c, "MIDI / OSC…", self.control)
 
     def _retitle(self):
         self.setWindowTitle(f"ShowSuite Light — {self.engine.project.name}")
@@ -460,6 +576,9 @@ class MainWindow(QMainWindow):
             self._seq_steps, self._seq_fixtures = [], []
             self.livedock.rebuild()
 
+    def control(self):
+        ControlDialog(self).exec()
+
     def outputs(self):
         OutputsDialog(self.engine, self).exec()
         if self.out_btn.isChecked():
@@ -484,6 +603,7 @@ class MainWindow(QMainWindow):
     def _load_into_engine(self, proj):
         self.engine.stop_output(); self.out_btn.setChecked(False)
         self.engine.project = proj
+        self.midi.mappings = proj.midi_mappings
         self.engine.clear_programmer()
         self.faders.show_fixture(None); self._retitle(); self._refresh_list()
         self.engine.live.active.clear(); self.livedock.rebuild()
@@ -512,7 +632,10 @@ class MainWindow(QMainWindow):
             self.path = f; pj.save(self.engine.project, f)
 
     def closeEvent(self, e):
-        self.engine.stop_output(); super().closeEvent(e)
+        self.engine.stop_output(); self.midi.close()
+        if self.osc:
+            self.osc.stop()
+        super().closeEvent(e)
 
 
 def main() -> int:
