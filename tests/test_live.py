@@ -97,3 +97,18 @@ def test_blind_hides_programmer_from_output():
     assert e.render_output(1)[0] == 0 and e.mixer.render(1)[0] == 200  # preview sì, uscita no
     e.blind = False
     assert e.render_output(1)[0] == 200
+
+
+def test_page_priority_and_flash_start():
+    e, c = make()
+    lo = LiveCue("lo", ["P0"], Preset("a", {"Red": 50}), priority=90)
+    hi = LiveCue("hi", ["P0"], Preset("b", {"Red": 250}), priority=1)
+    e.live.trigger(lo, page_priority=0); e.live.trigger(hi, page_priority=1); e.live.update()
+    assert e.mixer.render(1)[0] == 250          # pagina 1 batte pagina 0 anche con priorità cue più bassa
+    e.live.release(hi); c.t = 1; e.live.update()
+    assert e.mixer.render(1)[0] == 50
+    f = LiveCue("f", ["P1"], Preset("c", {"Red": 90}), fade_out=0.0)
+    e.live.start(f); e.live.start(f)            # start non fa toggle
+    e.live.update(); assert e.mixer.render(1)[3] == 90 and not e.live.active["f"]["releasing"]
+    e.set_value("P0", "Red", 7)
+    assert e.mixer.render(1)[0] == 7            # il programmer vince su tutto

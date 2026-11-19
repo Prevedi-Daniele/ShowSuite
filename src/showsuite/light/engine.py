@@ -14,11 +14,12 @@ class LightEngine:
     def __init__(self, project: Project | None = None, now=time.monotonic):
         self.project = project or Project()
         self.mixer = Mixer()
-        self.programmer = self.mixer.add_layer(100)  # valori impostati a mano
+        self.programmer = self.mixer.add_layer(10**6)  # override: sopra a tutti i cue
         self.values: dict[str, dict[str, int]] = {}  # fixture -> {canale: valore}
         self.output: OutputManager | None = None
         self.beat = BeatClock(120.0, now)
         self.library: dict = {"Dimmer generico (1 ch)": generic_dimmer(), "RGB generico (3 ch)": generic_rgb()}
+        self._highlight = self.mixer.add_layer(10**7)   # sopra a tutto, solo per riconoscere i fixture
         self.blind = False   # se attivo il programmer non va in uscita (resta nel Preview)
         self.grand_master = 1.0
         self.blackout = False
@@ -95,6 +96,19 @@ class LightEngine:
             for k in kinds:
                 out.setdefault(fx.universe, []).append(fx.address + prof.offset_of(k.name))
         return out
+
+    def set_highlight(self, names) -> None:
+        """Accende al massimo i fixture indicati (Highlight Mode). Lista vuota = spegne."""
+        self._highlight.clear()
+        for n in names:
+            try:
+                fx = self.project.patch.find(n)
+            except KeyError:
+                continue
+            for c in fx.profile.channels:
+                if c.kind:   # intensità e colori
+                    for ch, v in fx.channel_values({c.name: 65535 if c.fine else 255}).items():
+                        self._highlight.set(fx.universe, ch, v)
 
     def render_output(self, universe: int) -> bytes:
         return self.mixer.render(universe, skip={self.programmer} if self.blind else ())

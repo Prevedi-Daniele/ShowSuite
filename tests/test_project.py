@@ -64,3 +64,30 @@ def test_sequence_roundtrip(tmp_path):
     pj.save(p, str(f))
     c = pj.load(str(f)).cues[0]
     assert [x.values["Red"] for x in c.steps] == [1, 2] and c.beats_per_step == 0.5 and not c.loop
+
+
+def test_pages_and_fixture_beam_roundtrip(tmp_path):
+    from showsuite.light.live import LiveButton, LiveCue, LivePage
+    p = pj.Project("Pg")
+    p.patch.add(FixtureInstance("A", generic_rgb(), 1, 1, rotation=45.0, beam_angle=12.0, hide_beam=True))
+    p.cues.append(LiveCue("C", ["A"]))
+    p.pages.append(LivePage("Scene", [LiveButton("C", "flash", "#ff0000", "Rosso")], priority=3, fade_time=1.5))
+    f = tmp_path / "pg.showsuite-light"; pj.save(p, str(f)); q = pj.load(str(f))
+    a = q.patch.find("A")
+    assert (a.rotation, a.beam_angle, a.hide_beam) == (45.0, 12.0, True)
+    pg = q.pages[0]
+    assert pg.priority == 3 and pg.buttons[0].mode == "flash" and pg.buttons[0].label == "Rosso"
+
+
+def test_old_project_gets_default_page(tmp_path):
+    import json, zipfile
+    from showsuite.light.live import LiveCue
+    p = pj.Project("Old"); p.cues.append(LiveCue("X", []))
+    f = tmp_path / "o.showsuite-light"; pj.save(p, str(f))
+    with zipfile.ZipFile(f) as z:
+        doc = json.loads(z.read("project.json"))
+    doc.pop("pages")
+    g = tmp_path / "o2.showsuite-light"
+    with zipfile.ZipFile(g, "w") as z:
+        z.writestr("project.json", json.dumps(doc))
+    assert pj.load(str(g)).pages[0].buttons[0].cue == "X"

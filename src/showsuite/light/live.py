@@ -33,6 +33,26 @@ class LiveCue:
     loop: bool = True
 
 
+PAGE_PRIORITY_STEP = 100   # priorità effettiva = pagina * 100 + priorità del cue (0-99)
+
+
+@dataclass
+class LiveButton:
+    cue: str                    # nome del cue
+    mode: str = "toggle"        # "toggle" | "flash" (attivo solo finché premuto)
+    color: str = "#3a7bd5"
+    label: str = ""
+
+
+@dataclass
+class LivePage:
+    name: str
+    buttons: list[LiveButton] = field(default_factory=list)
+    priority: int = 0           # 0-99: tra pagine vince la più alta
+    fade_time: float = 0.0      # secondi, cambio pagina
+    columns: int = 6
+
+
 class LivePlayer:
     """Gestisce i cue attivi; `update` scrive nei layer del mixer."""
 
@@ -42,16 +62,27 @@ class LivePlayer:
         self.active: dict[str, dict] = {}   # nome cue -> stato
         self._layers: dict[int, object] = {}
 
-    def trigger(self, cue: LiveCue) -> None:
+    def trigger(self, cue: LiveCue, page_priority: int = 0) -> None:
         with self.engine.mixer.lock:
-            self._trigger(cue)
+            self._trigger(cue, page_priority)
 
-    def _trigger(self, cue: LiveCue) -> None:
+    def start(self, cue: LiveCue, page_priority: int = 0) -> None:
+        """Avvia sempre (mai toggle): per i pulsanti Flash."""
+        with self.engine.mixer.lock:
+            self.active.pop(cue.name, None)
+            self._begin(cue, page_priority)
+
+    def _trigger(self, cue: LiveCue, page_priority: int = 0) -> None:
         st = self.active.get(cue.name)
         if st and cue.toggle and not st["releasing"]:
             return self.release(cue)
+        self.active.pop(cue.name, None)   # rientra in coda: a parità vince il più recente
+        self._begin(cue, page_priority)
+
+    def _begin(self, cue: LiveCue, page_priority: int) -> None:
         self.active[cue.name] = {"cue": cue, "t0": self._now(), "releasing": False, "t1": 0.0,
-                                 "b0": self.engine.beat.beats()}
+                                 "b0": self.engine.beat.beats(),
+                                 "prio": page_priority * PAGE_PRIORITY_STEP + cue.priority}
 
     def release(self, cue: LiveCue) -> None:
         st = self.active.get(cue.name)
@@ -105,9 +136,10 @@ class LivePlayer:
                 del self.active[name]
                 continue
             cue = st["cue"]
-            layer = self._layers.get(cue.priority)
+            prio = st.get("prio", cue.priority)
+            layer = self._layers.get(prio)
             if layer is None:
-                layer = self._layers[cue.priority] = self.engine.mixer.add_layer(cue.priority)
+                layer = self._layers[prio] = self.engine.mixer.add_layer(prio)
             values: list[tuple[str, str, float]] = []
             if cue.preset:
                 for fx_name in cue.fixtures:

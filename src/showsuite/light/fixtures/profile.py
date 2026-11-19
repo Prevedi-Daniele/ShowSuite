@@ -29,6 +29,10 @@ class FixtureProfile:
     def footprint(self) -> int:
         return sum(c.width for c in self.channels)
 
+    @property
+    def is_mover(self) -> bool:
+        return any(c.name.lower().startswith(("pan", "tilt")) for c in self.channels)
+
     def channel_of_kind(self, kind: str) -> ChannelDef | None:
         return next((c for c in self.channels if c.kind == kind), None)
 
@@ -60,6 +64,9 @@ class FixtureInstance:
     address: int  # 1-512
     x: float = 0.5  # posizione nel Preview (0-1)
     y: float = 0.5
+    rotation: float = 0.0     # gradi: 0 = beam verso il basso, positivo = antiorario
+    beam_angle: float = 30.0  # apertura del cono (gradi)
+    hide_beam: bool = False
 
     @property
     def end_address(self) -> int:

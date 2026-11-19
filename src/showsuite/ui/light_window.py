@@ -5,7 +5,7 @@ import sys
 
 from PySide6.QtCore import QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QBrush, QColor, QPainter, QPen
-from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QDialog, QDialogButtonBox,
+from PySide6.QtWidgets import (QStackedWidget, QToolBar, QAbstractItemView, QApplication, QComboBox, QDialog, QDialogButtonBox,
                                QCheckBox, QDockWidget, QDoubleSpinBox, QFileDialog, QFormLayout, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QMainWindow, QMessageBox, QPushButton, QScrollArea, QSlider,
                                QSpinBox, QSplitter, QVBoxLayout, QWidget)
@@ -14,6 +14,9 @@ from ..light import project as pj
 from ..light.control.actions import ACTIONS, ActionRunner
 from ..light.control.midi import MidiController
 from ..light.control.osc import OscServer
+from . import theme
+from .live_view import LiveView
+from .preview import PreviewWidget
 from ..light.effects import WAVES, Effect
 from ..light.live import CURVES, LiveCue
 from ..light.preset import Preset
@@ -21,60 +24,9 @@ from ..light.engine import LightEngine
 from ..light.fixtures import FixtureInstance, PatchError
 from ..light.fixtures.ofl import OflImportError
 
-class PreviewWidget(QWidget):
-    selected = Signal(str)
-
-    def __init__(self, engine: LightEngine):
-        super().__init__()
-        self.engine = engine
-        self.current: str | None = None
-        self._drag: str | None = None
-        self.setMinimumSize(400, 300)
-
-    def _pos(self, fx) -> QPointF:
-        return QPointF(fx.x * self.width(), fx.y * self.height())
-
-    def paintEvent(self, _):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        p.fillRect(self.rect(), QColor(20, 20, 24))
-        for fx in self.engine.project.patch.fixtures:
-            r, g, b = self.engine.fixture_color(fx)
-            c = self._pos(fx)
-            p.setBrush(QBrush(QColor(r, g, b)))
-            sel = fx.name == self.current
-            p.setPen(QPen(QColor(255, 255, 255) if sel else QColor(90, 90, 100), 2 if sel else 1))
-            p.drawEllipse(c, 18, 18)
-            p.setPen(QColor(200, 200, 210))
-            p.drawText(int(c.x()) - 40, int(c.y()) + 36, 80, 16, Qt.AlignCenter, fx.name)
-
-    def _hit(self, pos) -> str | None:
-        for fx in reversed(self.engine.project.patch.fixtures):
-            d = self._pos(fx) - pos
-            if d.x() ** 2 + d.y() ** 2 <= 20 ** 2:
-                return fx.name
-        return None
-
-    def mousePressEvent(self, e):
-        name = self._hit(e.position())
-        self._drag = name
-        if name:
-            self.current = name
-            self.selected.emit(name)
-        self.update()
-
-    def mouseMoveEvent(self, e):
-        if self._drag:
-            fx = self.engine.project.patch.find(self._drag)
-            fx.x = min(1, max(0, e.position().x() / self.width()))
-            fx.y = min(1, max(0, e.position().y() / self.height()))
-            self.update()
-
-    def mouseReleaseEvent(self, _):
-        self._drag = None
-
-
 class FaderPanel(QWidget):
+    """Proprietà del primo fixture selezionato; i valori vanno a tutta la selezione."""
+
     def __init__(self, engine: LightEngine):
         super().__init__()
         self.engine = engine
@@ -84,31 +36,39 @@ class FaderPanel(QWidget):
         self.sliders: list[QWidget] = []
         self.lay.addStretch()
 
-    def show_fixture(self, name: str | None):
+    def show_fixture(self, name: str | None) -> None:
+        self.show_fixtures([name] if name else [])
+
+    def show_fixtures(self, names: list[str]) -> None:
         for w in self.sliders:
             w.setParent(None)
         self.sliders.clear()
-        if not name:
+        if not names:
             self.title.setText("Nessun fixture selezionato")
             return
-        fx = self.engine.project.patch.find(name)
-        self.title.setText(f"{fx.name}: U{fx.universe} @{fx.address}")
-        for ch in fx.profile.channels:
+        first = self.engine.project.patch.find(names[0])
+        if len(names) == 1:
+            self.title.setText(f"{first.name}: U{first.universe} @{first.address}")
+        else:
+            self.title.setText(f"{len(names)} fixture selezionati (valori applicati a tutti)")
+        for ch in first.profile.channels:
             row = QWidget()
             h = QHBoxLayout(row)
             h.setContentsMargins(0, 0, 0, 0)
             lab = QLabel(ch.name)
-            lab.setMinimumWidth(60)
+            lab.setMinimumWidth(90)
             s = QSlider(Qt.Horizontal)
-            top = 65535 if ch.fine else 255
-            s.setRange(0, top)
-            s.setValue(self.engine.get_value(name, ch.name))
+            s.setRange(0, 65535 if ch.fine else 255)
+            s.setValue(self.engine.get_value(first.name, ch.name))
             val = QLabel(str(s.value()))
             val.setMinimumWidth(40)
 
             def changed(v, n=ch.name, lbl=val):
                 lbl.setText(str(v))
-                self.engine.set_value(name, n, v)
+                for fx_name in names:
+                    fx = self.engine.project.patch.find(fx_name)
+                    if any(c.name == n for c in fx.profile.channels):
+                        self.engine.set_value(fx_name, n, v)
             s.valueChanged.connect(changed)
             h.addWidget(lab); h.addWidget(s); h.addWidget(val)
             self.lay.insertWidget(self.lay.count() - 1, row)
@@ -268,56 +228,6 @@ class SequenceDialog(QDialog):
         f.addRow(bb)
 
 
-class LiveDock(QWidget):
-    """Pulsanti cue, BPM e tap tempo."""
-
-    def __init__(self, engine: LightEngine):
-        super().__init__()
-        self.engine = engine
-        v = QVBoxLayout(self)
-        top = QHBoxLayout()
-        self.bpm = QDoubleSpinBox(); self.bpm.setRange(20, 400); self.bpm.setValue(engine.beat.bpm)
-        self.bpm.valueChanged.connect(lambda x: engine.beat.set_bpm(x))
-        tap = QPushButton("Tap"); tap.clicked.connect(self._tap)
-        top.addWidget(QLabel("BPM")); top.addWidget(self.bpm); top.addWidget(tap)
-        top.addSpacing(20); top.addWidget(QLabel("Master"))
-        self.master = QSlider(Qt.Horizontal); self.master.setRange(0, 100); self.master.setValue(100)
-        self.master.setMinimumWidth(160)
-        self.master.valueChanged.connect(lambda x: setattr(engine, "grand_master", x / 100))
-        top.addWidget(self.master)
-        self.bo = QPushButton("Blackout"); self.bo.setCheckable(True)
-        self.bo.toggled.connect(lambda on: setattr(engine, "blackout", on))
-        self.fr = QPushButton("Freeze"); self.fr.setCheckable(True)
-        self.fr.toggled.connect(engine.set_freeze)
-        self.bl = QPushButton("Blind"); self.bl.setCheckable(True)
-        self.bl.setToolTip("Le modifiche del programmer non vanno in uscita")
-        self.bl.toggled.connect(lambda on: setattr(engine, "blind", on))
-        top.addWidget(self.bo); top.addWidget(self.fr); top.addWidget(self.bl); top.addStretch()
-        v.addLayout(top)
-        self.grid_w = QWidget(); self.grid = QGridLayout(self.grid_w)
-        v.addWidget(self.grid_w); v.addStretch()
-        self.buttons: dict[str, QPushButton] = {}
-
-    def _tap(self):
-        self.engine.beat.tap()
-        self.bpm.blockSignals(True); self.bpm.setValue(self.engine.beat.bpm); self.bpm.blockSignals(False)
-
-    def rebuild(self):
-        for b in self.buttons.values():
-            b.setParent(None)
-        self.buttons.clear()
-        for i, cue in enumerate(self.engine.project.cues):
-            b = QPushButton(cue.name); b.setMinimumHeight(48); b.setCheckable(True)
-            b.clicked.connect(lambda _=False, c=cue: self.engine.live.trigger(c))
-            self.grid.addWidget(b, i // 6, i % 6)
-            self.buttons[cue.name] = b
-
-    def sync(self):
-        for name, b in self.buttons.items():
-            st = self.engine.live.active.get(name)
-            b.setChecked(bool(st and not st["releasing"]))
-
-
 class ControlDialog(QDialog):
     """OSC (porta) e MIDI (porta, mappature, MIDI-learn)."""
 
@@ -427,6 +337,52 @@ class ControlDialog(QDialog):
         self.t.stop(); self.win.midi.cancel_learn(); super().done(r)
 
 
+class TransportBar(QToolBar):
+    """Master, beat, blackout/freeze/blind, output."""
+
+    def __init__(self, win: "MainWindow"):
+        super().__init__("Controlli")
+        self.setMovable(False)
+        e = win.engine
+        self.bpm = QDoubleSpinBox(); self.bpm.setRange(20, 400); self.bpm.setValue(e.beat.bpm)
+        self.bpm.setDecimals(1); self.bpm.valueChanged.connect(lambda x: e.beat.set_bpm(x))
+        tap = QPushButton("Tap"); tap.clicked.connect(self._tap)
+        self.master = QSlider(Qt.Horizontal); self.master.setRange(0, 100); self.master.setValue(100)
+        self.master.setMinimumWidth(180)
+        self.master.valueChanged.connect(lambda x: setattr(e, "grand_master", x / 100))
+        self.bo = QPushButton("Blackout"); self.bo.setCheckable(True); self.bo.setObjectName("danger")
+        self.bo.toggled.connect(lambda on: setattr(e, "blackout", on))
+        self.fr = QPushButton("Freeze"); self.fr.setCheckable(True)
+        self.fr.toggled.connect(e.set_freeze)
+        self.bl = QPushButton("Blind"); self.bl.setCheckable(True)
+        self.bl.setToolTip("Le modifiche del programmer non vanno in uscita")
+        self.bl.toggled.connect(lambda on: setattr(e, "blind", on))
+        self.hl = QPushButton("Evidenzia"); self.hl.setCheckable(True)
+        self.hl.setToolTip("Accende i fixture selezionati per riconoscerli sul palco")
+        self.hl.toggled.connect(win.set_highlight)
+        self.out = QPushButton("Output OFF"); self.out.setCheckable(True)
+        self.out.toggled.connect(win._toggle_output)
+        self.design = QPushButton("Design"); self.design.setCheckable(True)
+        self.live = QPushButton("Live"); self.live.setCheckable(True)
+        for w in (self.design, self.live):
+            self.addWidget(w)
+        self.addSeparator()
+        self.addWidget(QLabel("BPM")); self.addWidget(self.bpm); self.addWidget(tap)
+        self.addSeparator()
+        self.addWidget(QLabel("Master")); self.addWidget(self.master)
+        for w in (self.bo, self.fr, self.bl, self.hl):
+            self.addWidget(w)
+        spacer = QWidget(); spacer.setSizePolicy(spacer.sizePolicy().horizontalPolicy().Expanding,
+                                                 spacer.sizePolicy().verticalPolicy().Preferred)
+        spacer.setStyleSheet("background: transparent;")
+        self.addWidget(spacer)
+        self.addWidget(self.out)
+
+    def _tap(self):
+        self.parent().engine.beat.tap()
+        self.bpm.blockSignals(True); self.bpm.setValue(self.parent().engine.beat.bpm); self.bpm.blockSignals(False)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -439,27 +395,39 @@ class MainWindow(QMainWindow):
         self._seq_fixtures: list[str] = []
         self.preview = PreviewWidget(self.engine)
         self.faders = FaderPanel(self.engine)
+        self.live_view = LiveView(self.engine)
         self.fixlist = QListWidget()
         self.fixlist.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.livedock = LiveDock(self.engine)
-        dock = QDockWidget("Live", self); dock.setWidget(self.livedock)
-        self.addDockWidget(Qt.BottomDockWidgetArea, dock)
-        self.preview.selected.connect(self._select)
-        self.fixlist.currentTextChanged.connect(self._select_from_list)
-        split = QSplitter()
+        self.preview.selection_changed.connect(self._on_preview_selection)
+        self.fixlist.itemSelectionChanged.connect(self._on_list_selection)
+        # layout: patch | preview ; sotto Design/Live
         left = QWidget(); lv = QVBoxLayout(left); lv.addWidget(QLabel("Patch")); lv.addWidget(self.fixlist)
         scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setWidget(self.faders)
-        for w in (left, self.preview, scroll):
-            split.addWidget(w)
-        split.setSizes([220, 560, 320])
-        self.setCentralWidget(split)
+        self.stack = QStackedWidget()
+        self.stack.addWidget(scroll); self.stack.addWidget(self.live_view)
+        top = QSplitter(); top.addWidget(left); top.addWidget(self.preview); top.setSizes([200, 900])
+        main = QSplitter(Qt.Vertical); main.addWidget(top); main.addWidget(self.stack); main.setSizes([420, 280])
+        self.setCentralWidget(main)
+        self.bar = TransportBar(self)
+        self.addToolBar(self.bar)
+        self.bar.design.clicked.connect(lambda: self.show_view(0))
+        self.bar.live.clicked.connect(lambda: self.show_view(1))
+        self.show_view(1)
         self._menus()
-        self.out_btn = QPushButton("Output OFF")
-        self.out_btn.setCheckable(True)
-        self.out_btn.toggled.connect(self._toggle_output)
-        self.statusBar().addPermanentWidget(self.out_btn)
         self.timer = QTimer(self); self.timer.timeout.connect(self._tick); self.timer.start(40)
         self._retitle(); self._refresh_list()
+
+    def show_view(self, i: int) -> None:
+        self.stack.setCurrentIndex(i)
+        self.bar.design.setChecked(i == 0); self.bar.live.setChecked(i == 1)
+
+    @property
+    def out_btn(self):
+        return self.bar.out
+
+    @property
+    def livedock(self):   # compatibilità: ora è la Live view
+        return self.live_view
 
     def _menus(self):
         def act(menu, text, fn, key=None):
@@ -469,8 +437,10 @@ class MainWindow(QMainWindow):
         m = self.menuBar().addMenu("File")
         act(m, "Nuovo", self.new, "Ctrl+N"); act(m, "Apri…", self.open, "Ctrl+O")
         act(m, "Salva", self.save, "Ctrl+S"); act(m, "Salva con nome…", self.save_as)
+        v = self.menuBar().addMenu("Vista")
+        act(v, "Design", lambda: self.show_view(0), "Ctrl+D"); act(v, "Live", lambda: self.show_view(1), "Ctrl+L")
         p = self.menuBar().addMenu("Patch")
-        act(p, "Aggiungi fixture…", self.add_fixture); act(p, "Rimuovi selezionato", self.remove_fixture)
+        act(p, "Aggiungi fixture…", self.add_fixture); act(p, "Rimuovi selezionati", self.remove_fixture)
         act(p, "Importa profilo OFL…", self.import_ofl)
         act(p, "Azzera valori", self.clear_values)
         act(p, "Registra cue dalla selezione…", self.record_cue, "Ctrl+R")
@@ -488,18 +458,35 @@ class MainWindow(QMainWindow):
         for f in self.engine.project.patch.fixtures:
             self.fixlist.addItem(f.name)
         self.fixlist.blockSignals(False)
+        self.preview.set_selection([n for n in self.preview.selection], emit=False)
+        self._sync_list()
         self.preview.update()
 
-    def _select(self, name):
-        self.preview.current = name
-        self.faders.show_fixture(name)
-        items = self.fixlist.findItems(name, Qt.MatchExactly)
-        if items:
-            self.fixlist.blockSignals(True); self.fixlist.setCurrentItem(items[0]); self.fixlist.blockSignals(False)
+    def _sync_list(self):
+        self.fixlist.blockSignals(True)
+        for i in range(self.fixlist.count()):
+            it = self.fixlist.item(i)
+            it.setSelected(it.text() in self.preview.selection)
+        self.fixlist.blockSignals(False)
 
-    def _select_from_list(self, name):
-        if name:
-            self._select(name); self.preview.update()
+    def _on_preview_selection(self, names):
+        self._sync_list()
+        self.faders.show_fixtures(names)
+        if self.bar.hl.isChecked():
+            self.engine.set_highlight(names)
+
+    def _on_list_selection(self):
+        names = [i.text() for i in self.fixlist.selectedItems()]
+        self.preview.set_selection(names)
+
+    def selected_names(self) -> list[str]:
+        return list(self.preview.selection)
+
+    def _select(self, name):   # compatibilità con i test/azioni
+        self.preview.set_selection([name] if name else [])
+
+    def set_highlight(self, on: bool):
+        self.engine.set_highlight(self.preview.selection if on else [])
 
     def add_fixture(self):
         d = AddFixtureDialog(self.engine, self)
@@ -508,11 +495,13 @@ class MainWindow(QMainWindow):
         self._refresh_list()
 
     def remove_fixture(self):
-        n = self.preview.current
-        if n:
+        names = self.selected_names()
+        if not names:
+            return
+        for n in names:
             self.engine.remove_fixture(n)
-            self.preview.current = None
-            self.faders.show_fixture(None); self._refresh_list()
+        self.preview.set_selection([])
+        self._refresh_list()
 
     def import_ofl(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Importa profili OFL", "", "Fixture OFL (*.json)")
@@ -526,10 +515,10 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Importate {total} modalità", 5000)
 
     def clear_values(self):
-        self.engine.clear_programmer(); self.faders.show_fixture(self.preview.current)
+        self.engine.clear_programmer(); self.faders.show_fixtures(self.selected_names())
 
     def record_cue(self):
-        names = [i.text() for i in self.fixlist.selectedItems()]
+        names = self.selected_names()
         if not names:
             QMessageBox.information(self, "Cue", "Seleziona uno o più fixture nell'elenco Patch.")
             return
@@ -538,10 +527,11 @@ class MainWindow(QMainWindow):
             self.engine.project.cues.append(d.build())
             for n in names:   # i valori sono ora nel cue: svuota il programmer per questi fixture
                 self.engine.release_programmer(n)
-            self.livedock.rebuild(); self.faders.show_fixture(self.preview.current)
+            self.live_view.add_cue_button(self.engine.project.cues[-1].name)
+            self.faders.show_fixtures(self.selected_names())
 
     def add_step(self):
-        names = [i.text() for i in self.fixlist.selectedItems()] or self._seq_fixtures
+        names = self.selected_names() or self._seq_fixtures
         if not names:
             QMessageBox.information(self, "Sequenza", "Seleziona i fixture nell'elenco Patch.")
             return
@@ -560,7 +550,7 @@ class MainWindow(QMainWindow):
         self._seq_steps.append(Preset(f"Step {len(self._seq_steps) + 1}", values))
         for n in names:
             self.engine.release_programmer(n)
-        self.faders.show_fixture(self.preview.current)
+        self.faders.show_fixtures(self.selected_names())
         self.statusBar().showMessage(f"Sequenza: {len(self._seq_steps)} step registrati", 5000)
 
     def finish_sequence(self):
@@ -574,7 +564,7 @@ class MainWindow(QMainWindow):
                 beats_per_step=d.bps.value(), crossfade=d.xf.value(), loop=d.loop.isChecked(),
                 priority=d.prio.value()))
             self._seq_steps, self._seq_fixtures = [], []
-            self.livedock.rebuild()
+            self.live_view.add_cue_button(self.engine.project.cues[-1].name)
 
     def control(self):
         ControlDialog(self).exec()
@@ -605,8 +595,9 @@ class MainWindow(QMainWindow):
         self.engine.project = proj
         self.midi.mappings = proj.midi_mappings
         self.engine.clear_programmer()
-        self.faders.show_fixture(None); self._retitle(); self._refresh_list()
-        self.engine.live.active.clear(); self.livedock.rebuild()
+        self.preview.set_selection([], emit=False); self.faders.show_fixtures([])
+        self._retitle(); self._refresh_list()
+        self.engine.live.active.clear(); self.live_view.rebuild()
 
     def new(self):
         self.path = None; self._load_into_engine(pj.Project())
@@ -640,6 +631,7 @@ class MainWindow(QMainWindow):
 
 def main() -> int:
     app = QApplication(sys.argv)
+    theme.apply(app)
     w = MainWindow(); w.resize(1100, 640); w.show()
     return app.exec()
 

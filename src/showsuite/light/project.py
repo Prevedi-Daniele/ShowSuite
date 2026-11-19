@@ -10,7 +10,7 @@ from .dmx.drivers import ArtNetDriver, OpenDmxDriver, OutputDriver, SacnDriver
 from .effects import Effect
 from .fixtures import ChannelDef, FixtureInstance, FixtureProfile, Patch
 from .control.midi import MidiMapping
-from .live import LiveCue
+from .live import LiveButton, LiveCue, LivePage
 from .preset import Palette, Preset
 
 SCHEMA_VERSION = 2
@@ -42,6 +42,7 @@ class Project:
     outputs: list[OutputConfig] = field(default_factory=list)
     palettes: list[Palette] = field(default_factory=list)
     cues: list[LiveCue] = field(default_factory=list)
+    pages: list[LivePage] = field(default_factory=list)
     midi_mappings: list[MidiMapping] = field(default_factory=list)
     osc_port: int = 21600
 
@@ -87,13 +88,17 @@ def save(project: Project, path: str) -> None:
         pid = _profile_id(f.profile)
         profiles[pid] = f.profile
         fixtures.append({"name": f.name, "profile": pid, "universe": f.universe,
-                         "address": f.address, "x": f.x, "y": f.y})
+                         "address": f.address, "x": f.x, "y": f.y, "rotation": f.rotation,
+                         "beam_angle": f.beam_angle, "hide_beam": f.hide_beam})
     doc = {"schema_version": SCHEMA_VERSION, "name": project.name, "fixtures": fixtures,
            "outputs": [{"type": o.type, "universe": o.universe, "params": o.params}
                        for o in project.outputs],
            "palettes": [{"name": p.name, "presets": [{"name": x.name, "values": x.values}
                                                      for x in p.presets]} for p in project.palettes],
            "cues": [_cue_to_dict(c) for c in project.cues],
+           "pages": [{"name": p.name, "priority": p.priority, "fade_time": p.fade_time,
+                      "columns": p.columns, "buttons": [vars(b) for b in p.buttons]}
+                     for p in project.pages],
            "midi_mappings": [vars(m) for m in project.midi_mappings], "osc_port": project.osc_port}
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("project.json", json.dumps(doc, indent=2, ensure_ascii=False))
@@ -112,12 +117,18 @@ def load(path: str) -> Project:
     proj = Project(name=doc["name"])
     for f in doc["fixtures"]:
         proj.patch.add(FixtureInstance(f["name"], profiles[f["profile"]], f["universe"],
-                                       f["address"], f.get("x", 0.5), f.get("y", 0.5)))
+                                       f["address"], f.get("x", 0.5), f.get("y", 0.5),
+                                       f.get("rotation", 0.0), f.get("beam_angle", 30.0),
+                                       f.get("hide_beam", False)))
     proj.outputs = [OutputConfig(o["type"], o["universe"], o.get("params", {}))
                     for o in doc["outputs"]]
     proj.palettes = [Palette(p["name"], [Preset(x["name"], x["values"]) for x in p["presets"]])
                      for p in doc.get("palettes", [])]
     proj.cues = [_cue_from_dict(c) for c in doc.get("cues", [])]
+    proj.pages = [LivePage(p["name"], [LiveButton(**b) for b in p.get("buttons", [])], p.get("priority", 0),
+                           p.get("fade_time", 0.0), p.get("columns", 6)) for p in doc.get("pages", [])]
+    if not proj.pages and proj.cues:   # progetti senza pagine: tutti i cue su una pagina
+        proj.pages = [LivePage("Pagina 1", [LiveButton(c.name) for c in proj.cues])]
     proj.midi_mappings = [MidiMapping(**m) for m in doc.get("midi_mappings", [])]
     proj.osc_port = doc.get("osc_port", 21600)
     return proj
