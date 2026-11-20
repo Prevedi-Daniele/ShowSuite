@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (QStackedWidget, QToolBar, QAbstractItemView, QApp
 
 from ..light import project as pj
 from ..light.control.actions import ACTIONS, ActionRunner
+from ..light.control.clocksync import MidiClockSync
+from ..light.control.dmxin import DmxInput, DmxMapping
 from ..light.control.midi import MidiController
 from ..light.control.osc import OscServer
 from . import theme
@@ -251,6 +253,19 @@ class ControlDialog(QDialog):
         v.addLayout(mrow)
         if not self.ports.count():
             v.addWidget(QLabel("Nessuna porta MIDI (serve: pip install showsuite[midi] e il controller collegato)."))
+        self.clock_chk = QCheckBox("Sincronizza il BPM con il MIDI clock esterno")
+        self.clock_chk.setChecked(win.midi.clock.enabled)
+        self.clock_chk.toggled.connect(lambda on: setattr(win.midi.clock, "enabled", on))
+        v.addWidget(self.clock_chk)
+        drow = QHBoxLayout()
+        self.dmx_btn = QPushButton("Ferma DMX-In" if win.dmxin else "Avvia DMX-In (Art-Net/sACN)")
+        self.dmx_btn.clicked.connect(self._toggle_dmxin)
+        self.dmx_uni = QSpinBox(); self.dmx_uni.setRange(0, 32767); self.dmx_uni.setValue(1)
+        self.dmx_ch = QSpinBox(); self.dmx_ch.setRange(1, 512)
+        add_dmx = QPushButton("Mappa canale DMX → azione"); add_dmx.clicked.connect(self._add_dmx)
+        for w_ in (self.dmx_btn, QLabel("U"), self.dmx_uni, QLabel("Ch"), self.dmx_ch, add_dmx):
+            drow.addWidget(w_)
+        v.addLayout(drow)
         # learn
         f = QFormLayout()
         self.action = QComboBox(); self.action.addItems(ACTIONS)
@@ -299,6 +314,36 @@ class ControlDialog(QDialog):
                 QMessageBox.warning(self, "OSC", f"Impossibile aprire la porta: {e}")
         self.osc_btn.setText("Ferma OSC" if w.osc else "Avvia OSC")
 
+    def _toggle_dmxin(self):
+        w = self.win
+        if w.dmxin:
+            w.dmxin.stop(); w.dmxin = None
+        else:
+            try:
+                w.dmxin = DmxInput(w.runner, w.engine.project.dmx_mappings); w.dmxin.start()
+            except OSError as e:
+                w.dmxin = None
+                QMessageBox.warning(self, "DMX-In", f"Impossibile aprire le porte: {e}")
+        self.dmx_btn.setText("Ferma DMX-In" if w.dmxin else "Avvia DMX-In (Art-Net/sACN)")
+
+    def _action_args(self):
+        a = self.action.currentText()
+        args = {}
+        if a == "cue":
+            args = {"cue": self.arg1.currentText()}
+        elif a == "fixture":
+            args = {"fixture": self.arg1.currentText(), "channel": self.arg2.currentText()}
+        return a, args
+
+    def _add_dmx(self):
+        a, args = self._action_args()
+        if a in ("cue", "fixture") and not all(args.values()):
+            QMessageBox.information(self, "DMX-In", "Scegli cue o fixture/canale."); return
+        m = self.win.engine.project.dmx_mappings
+        m[:] = [x for x in m if (x.universe, x.channel) != (self.dmx_uni.value(), self.dmx_ch.value())]
+        m.append(DmxMapping(self.dmx_uni.value(), self.dmx_ch.value(), a, args))
+        self._reload()
+
     def _open_midi(self):
         try:
             self.win.midi.open(self.ports.currentText())
@@ -326,12 +371,20 @@ class ControlDialog(QDialog):
     def _reload(self):
         self.list.clear()
         for m in self.win.midi.mappings:
-            self.list.addItem(f"{m.kind} ch{m.channel + 1} #{m.number} → {m.action} {m.args or ''}")
+            self.list.addItem(f"MIDI {m.kind} ch{m.channel + 1} #{m.number} → {m.action} {m.args or ''}")
+        for m in self.win.engine.project.dmx_mappings:
+            self.list.addItem(f"DMX U{m.universe} ch{m.channel} → {m.action} {m.args or ''}")
 
     def _remove(self):
         i = self.list.currentRow()
-        if i >= 0:
-            del self.win.midi.mappings[i]; self._reload()
+        mm, dm = self.win.midi.mappings, self.win.engine.project.dmx_mappings
+        if 0 <= i < len(mm):
+            del mm[i]
+        elif len(mm) <= i < len(mm) + len(dm):
+            del dm[i - len(mm)]
+        else:
+            return
+        self._reload()
 
     def done(self, r):
         self.t.stop(); self.win.midi.cancel_learn(); super().done(r)
@@ -391,6 +444,8 @@ class MainWindow(QMainWindow):
         self.runner = ActionRunner(self.engine)
         self.midi = MidiController(self.runner, self.engine.project.midi_mappings)
         self.osc: OscServer | None = None
+        self.dmxin: DmxInput | None = None
+        self.midi.clock = MidiClockSync(self.engine.beat)
         self._seq_steps: list[Preset] = []
         self._seq_fixtures: list[str] = []
         self.preview = PreviewWidget(self.engine)
@@ -594,6 +649,8 @@ class MainWindow(QMainWindow):
         self.engine.stop_output(); self.out_btn.setChecked(False)
         self.engine.project = proj
         self.midi.mappings = proj.midi_mappings
+        if self.dmxin:
+            self.dmxin.mappings = proj.dmx_mappings
         self.engine.clear_programmer()
         self.preview.set_selection([], emit=False); self.faders.show_fixtures([])
         self._retitle(); self._refresh_list()
@@ -626,6 +683,8 @@ class MainWindow(QMainWindow):
         self.engine.stop_output(); self.midi.close()
         if self.osc:
             self.osc.stop()
+        if self.dmxin:
+            self.dmxin.stop()
         super().closeEvent(e)
 
 

@@ -112,3 +112,19 @@ def test_flash_button_and_selection_and_highlight():
     w.faders.sliders[0].findChildren(__import__("PySide6.QtWidgets", fromlist=["QSlider"]).QSlider)[0].setValue(77)
     assert w.engine.mixer.render(1)[0] == 77 and w.engine.mixer.render(1)[3] == 77
     w.close()
+
+
+def test_control_dialog_dmx_and_clock():
+    from PySide6.QtWidgets import QApplication
+    from showsuite.ui.light_window import ControlDialog, MainWindow
+    app = QApplication.instance() or QApplication([])
+    w = MainWindow()
+    d = ControlDialog(w)
+    d.action.setCurrentText("master"); d.dmx_uni.setValue(3); d.dmx_ch.setValue(7); d._add_dmx()
+    d.dmx_ch.setValue(7); d._add_dmx()          # stessa mappa: sostituisce, non duplica
+    assert len(w.engine.project.dmx_mappings) == 1
+    d.list.setCurrentRow(d.list.count() - 1); d._remove()
+    assert not w.engine.project.dmx_mappings
+    d.clock_chk.setChecked(False)
+    assert w.midi.clock.enabled is False
+    d.close(); w.close()

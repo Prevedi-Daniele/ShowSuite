@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from .dmx.drivers import ArtNetDriver, OpenDmxDriver, OutputDriver, SacnDriver
 from .effects import Effect
 from .fixtures import ChannelDef, FixtureInstance, FixtureProfile, Patch
+from .control.dmxin import DmxMapping
 from .control.midi import MidiMapping
 from .live import CueList, CueListStep, LiveButton, LiveCue, LivePage
 from .preset import Palette, Preset
@@ -45,6 +46,7 @@ class Project:
     pages: list[LivePage] = field(default_factory=list)
     midi_mappings: list[MidiMapping] = field(default_factory=list)
     osc_port: int = 21600
+    dmx_mappings: list[DmxMapping] = field(default_factory=list)
 
 
 def _cue_to_dict(c: LiveCue) -> dict:
@@ -103,7 +105,8 @@ def save(project: Project, path: str) -> None:
                       "cuelist": ({"name": p.cuelist.name, "loop": p.cuelist.loop, "priority": p.cuelist.priority,
                                    "steps": [vars(x) for x in p.cuelist.steps]} if p.cuelist else None)}
                      for p in project.pages],
-           "midi_mappings": [vars(m) for m in project.midi_mappings], "osc_port": project.osc_port}
+           "midi_mappings": [vars(m) for m in project.midi_mappings], "osc_port": project.osc_port,
+           "dmx_mappings": [vars(m) for m in project.dmx_mappings]}
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("project.json", json.dumps(doc, indent=2, ensure_ascii=False))
         for pid, prof in profiles.items():
@@ -138,4 +141,5 @@ def load(path: str) -> Project:
         proj.pages = [LivePage("Pagina 1", [LiveButton(c.name) for c in proj.cues])]
     proj.midi_mappings = [MidiMapping(**m) for m in doc.get("midi_mappings", [])]
     proj.osc_port = doc.get("osc_port", 21600)
+    proj.dmx_mappings = [DmxMapping(**m) for m in doc.get("dmx_mappings", [])]
     return proj

@@ -22,6 +22,11 @@ class BeatClock:
         self._origin = self._now()
         self.bpm = bpm
 
+    def align(self, beat_position: float) -> None:
+        """Fa coincidere la posizione corrente con `beat_position` (es. da MIDI start / Link)."""
+        self._origin_beats = beat_position
+        self._origin = self._now()
+
     def tap(self) -> None:
         t = self._now()
         if self._taps and t - self._taps[-1] > 2.0:   # pausa lunga: ricomincia

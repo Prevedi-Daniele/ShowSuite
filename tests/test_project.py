@@ -91,3 +91,11 @@ def test_old_project_gets_default_page(tmp_path):
     with zipfile.ZipFile(g, "w") as z:
         z.writestr("project.json", json.dumps(doc))
     assert pj.load(str(g)).pages[0].buttons[0].cue == "X"
+
+
+def test_dmx_mappings_roundtrip(tmp_path):
+    from showsuite.light.control.dmxin import DmxMapping
+    p = pj.Project("D"); p.dmx_mappings.append(DmxMapping(2, 10, "cue", {"cue": "X"}))
+    f = tmp_path / "d.showsuite-light"; pj.save(p, str(f))
+    m = pj.load(str(f)).dmx_mappings[0]
+    assert (m.universe, m.channel, m.action, m.args) == (2, 10, "cue", {"cue": "X"})

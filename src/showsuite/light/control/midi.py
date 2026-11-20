@@ -30,6 +30,7 @@ class MidiController:
         self.on_learned = None   # callback(MidiMapping)
         self.errors: list[str] = []
         self._port = None
+        self.clock = None   # MidiClockSync opzionale (imposta dall'esterno)
 
     # --- learn ---
     def learn(self, action: str, args: dict | None = None) -> None:
@@ -65,6 +66,9 @@ class MidiController:
                     self.errors.append(str(e)); del self.errors[:-20]
 
     def _on_message(self, msg) -> None:
+        if self.clock is not None and msg.type in ("clock", "start", "stop", "continue"):
+            getattr(self.clock, "on_" + msg.type)()
+            return
         if msg.type in ("note_on", "note_off"):
             self.handle(msg.type, msg.channel, msg.note, msg.velocity)
         elif msg.type == "control_change":
