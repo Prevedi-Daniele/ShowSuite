@@ -57,6 +57,7 @@ class DmxInput:
         self.ports = {"artnet": artnet_port, "sacn": sacn_port}
         self.host = host
         self.errors: list[str] = []
+        self.log = None     # ControlLog opzionale
         self._last: dict[tuple[int, int], int] = {}
         self._socks: list[socket.socket] = []
         self._threads: list[threading.Thread] = []
@@ -82,8 +83,13 @@ class DmxInput:
                         self.runner.run(m.action, m.args, 1.0 if is_on else 0.0)
                 else:
                     self.runner.run(m.action, m.args, v / 255.0)
+                if self.log:
+                    self.log.add("dmx", f"Universe {universe}", f"Channel {m.channel}: {v}",
+                                 f"Azione eseguita: {m.action}", "ok")
             except (ControlError, KeyError) as e:
                 self.errors.append(str(e)); del self.errors[:-20]
+                if self.log:
+                    self.log.add("dmx", f"Universe {universe}", f"Channel {m.channel}: {v}", f"Azione non valida: {e}", "invalid")
 
     # --- rete ---
     def start(self) -> None:

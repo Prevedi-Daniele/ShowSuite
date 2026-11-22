@@ -31,6 +31,8 @@ class MidiController:
         self.errors: list[str] = []
         self._port = None
         self.clock = None   # MidiClockSync opzionale (imposta dall'esterno)
+        self.log = None     # ControlLog opzionale
+        self.endpoint = "MIDI"
 
     # --- learn ---
     def learn(self, action: str, args: dict | None = None) -> None:
@@ -49,21 +51,32 @@ class MidiController:
         k = "cc" if kind == "cc" else "note"
         if kind == "note_off":
             value = 0
+        msg = f"Channel {channel}: " + (f"CC {number}" if k == "cc" else f"Note {'On' if value else 'Off'} {number}") + f" ({value})"
         if self._learn and (k == "cc" or (kind == "note_on" and value > 0)):
             action, args = self._learn
             self._learn = None
             self.mappings[:] = [m for m in self.mappings if m.key() != (k, channel, number)]  # stessa lista del progetto
             m = MidiMapping(k, channel, number, action, args)
             self.mappings.append(m)
+            if self.log:
+                self.log.add("midi", self.endpoint, msg, f"Associato a «{action}»", "learn")
             if self.on_learned:
                 self.on_learned(m)
             return
+        matched = False
         for m in self.mappings:
             if m.key() == (k, channel, number):
+                matched = True
                 try:
                     self.runner.run(m.action, m.args, value / 127.0)
+                    if self.log:
+                        self.log.add("midi", self.endpoint, msg, f"Azione eseguita: {m.action}", "ok")
                 except (ControlError, KeyError) as e:
                     self.errors.append(str(e)); del self.errors[:-20]
+                    if self.log:
+                        self.log.add("midi", self.endpoint, msg, f"Azione non valida: {e}", "invalid")
+        if not matched and self.log and not self.log.paused:
+            self.log.add("midi", self.endpoint, msg, "Nessuna associazione", "info")
 
     def _on_message(self, msg) -> None:
         if self.clock is not None and msg.type in ("clock", "start", "stop", "continue"):
@@ -86,6 +99,7 @@ class MidiController:
     def open(self, name: str) -> None:
         import mido   # ImportError esplicito se manca (pip install showsuite[midi])
         self.close()
+        self.endpoint = name
         self._port = mido.open_input(name, callback=self._on_message)
 
     def close(self) -> None:

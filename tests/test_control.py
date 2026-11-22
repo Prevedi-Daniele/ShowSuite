@@ -96,3 +96,37 @@ def test_midi_mappings_saved_in_project(tmp_path):
     f = tmp_path / "m.showsuite-light"; pj.save(p, str(f))
     q = pj.load(str(f))
     assert q.osc_port == 9000 and q.midi_mappings[0].action == "master"
+
+
+def test_control_log_midi_osc_dmx():
+    from showsuite.light.control.actions import ActionRunner
+    from showsuite.light.control.log import ControlLog
+    from showsuite.light.control.midi import MidiController
+    from showsuite.light.engine import LightEngine
+    e = LightEngine(); r = ActionRunner(e); log = ControlLog()
+    m = MidiController(r); m.log = log
+    m.handle("cc", 0, 7, 100)                      # nessuna associazione
+    m.learn("master"); m.handle("cc", 0, 7, 100)   # learn
+    m.handle("cc", 0, 7, 127)                      # eseguita
+    st = [x.status for x in log.snapshot("midi")]
+    assert st == ["info", "learn", "ok"] and "CC 7" in log.snapshot("midi")[0].message
+    assert log.snapshot("osc") == []
+    log.paused = True; m.handle("cc", 0, 7, 1); assert len(log.snapshot()) == 3
+    log.paused = False; log.clear(); assert log.snapshot() == []
+
+
+def test_monitor_windows_smoke():
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    from showsuite.light.control.log import ControlLog
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.fixtures import FixtureInstance, generic_rgb
+    from showsuite.ui.monitor_windows import ControlLogWindow, DmxMonitor
+    app = QApplication.instance() or QApplication([])
+    e = LightEngine(); e.project.patch.add(FixtureInstance("A", generic_rgb(), 1, 5))
+    e.set_value("A", "Red", 200)
+    mon = DmxMonitor(e, ["A"])
+    assert mon.table.rowCount() == 3 and mon.table.item(0, 0).text() == "5" and mon.table.item(0, 3).text() == "200"
+    log = ControlLog(); log.add("midi", "X", "Channel 0: CC 7 (1)", "ok")
+    w = ControlLogWindow(log); assert w.table.rowCount() == 1

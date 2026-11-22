@@ -19,6 +19,8 @@ from ..light.control.osc import OscServer
 from . import theme
 from .design_view import DesignView
 from .patch_window import PatchWindow
+from .monitor_windows import ControlLogWindow, DmxMonitor
+from ..light.control.log import ControlLog
 from .live_view import LiveView
 from .preview import PreviewWidget
 from ..light.effects import WAVES, Effect
@@ -313,7 +315,7 @@ class ControlDialog(QDialog):
         else:
             try:
                 w.engine.project.osc_port = self.osc_port.value()
-                w.osc = OscServer(w.runner, self.osc_port.value()); w.osc.start()
+                w.osc = OscServer(w.runner, self.osc_port.value()); w.osc.log = w.control_log; w.osc.start()
             except OSError as e:
                 w.osc = None
                 QMessageBox.warning(self, "OSC", f"Impossibile aprire la porta: {e}")
@@ -325,7 +327,7 @@ class ControlDialog(QDialog):
             w.dmxin.stop(); w.dmxin = None
         else:
             try:
-                w.dmxin = DmxInput(w.runner, w.engine.project.dmx_mappings); w.dmxin.start()
+                w.dmxin = DmxInput(w.runner, w.engine.project.dmx_mappings); w.dmxin.log = w.control_log; w.dmxin.start()
             except OSError as e:
                 w.dmxin = None
                 QMessageBox.warning(self, "DMX-In", f"Impossibile aprire le porte: {e}")
@@ -448,6 +450,7 @@ class MainWindow(QMainWindow):
         self.osc: OscServer | None = None
         self.dmxin: DmxInput | None = None
         self.midi.clock = MidiClockSync(self.engine.beat)
+        self.control_log = ControlLog(); self.midi.log = self.control_log
         self._seq_steps: list[Preset] = []
         self._seq_fixtures: list[str] = []
         self.preview = PreviewWidget(self.engine)
@@ -551,6 +554,7 @@ class MainWindow(QMainWindow):
         act(p, "Sequenza: termina e crea cue…", self.finish_sequence)
         o = self.menuBar().addMenu("Uscite"); act(o, "Configura uscite…", self.outputs)
         c = self.menuBar().addMenu("Controllo"); act(c, "MIDI / OSC…", self.control)
+        act(c, "External Control Log…", self.show_control_log); act(c, "DMX Monitor…", self.show_dmx_monitor)
 
     def patch_window(self):
         d = PatchWindow(self.engine, self)
@@ -674,6 +678,14 @@ class MainWindow(QMainWindow):
                 priority=d.prio.value()))
             self._seq_steps, self._seq_fixtures = [], []
             self.live_view.add_cue_button(self.engine.project.cues[-1].name)
+
+    def show_control_log(self):
+        self._clog = ControlLogWindow(self.control_log, self); self._clog.show()
+
+    def show_dmx_monitor(self):
+        names = self.selected_names() or [f.name for f in self.engine.project.patch.fixtures]
+        if names:
+            self._dmon = DmxMonitor(self.engine, names, self); self._dmon.show()
 
     def control(self):
         ControlDialog(self).exec()

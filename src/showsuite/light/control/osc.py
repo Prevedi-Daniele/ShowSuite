@@ -113,6 +113,7 @@ class OscServer:
     def __init__(self, runner: ActionRunner, port: int = DEFAULT_PORT, host: str = "0.0.0.0"):
         self.runner, self.port, self.host = runner, port, host
         self.errors: list[str] = []
+        self.log = None     # ControlLog opzionale
         self._sock: socket.socket | None = None
         self._thread: threading.Thread | None = None
 
@@ -129,14 +130,22 @@ class OscServer:
         sock = self._sock
         while sock is self._sock:
             try:
-                data, _ = sock.recvfrom(65535)
+                data, src = sock.recvfrom(65535)
             except socket.timeout:
                 continue
             except OSError:
                 return
             try:
                 for addr, args in parse_osc(data):
-                    dispatch(self.runner, addr, args)
+                    msg = addr + (" " + " ".join(str(a) for a in args) if args else "")
+                    try:
+                        dispatch(self.runner, addr, args)
+                        if self.log:
+                            self.log.add("osc", src[0], msg, "Azione eseguita", "ok")
+                    except (ValueError, KeyError) as e:
+                        if self.log:
+                            self.log.add("osc", src[0], msg, f"Azione non valida: {e}", "invalid")
+                        raise
             except (ValueError, KeyError) as e:   # input esterno: mai crashare il thread
                 self.errors.append(str(e))
                 del self.errors[:-20]
