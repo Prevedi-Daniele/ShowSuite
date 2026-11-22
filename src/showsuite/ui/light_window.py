@@ -17,6 +17,7 @@ from ..light.control.dmxin import DmxInput, DmxMapping
 from ..light.control.midi import MidiController
 from ..light.control.osc import OscServer
 from . import theme
+from .design_view import DesignView
 from .live_view import LiveView
 from .preview import PreviewWidget
 from ..light.effects import WAVES, Effect
@@ -458,8 +459,10 @@ class MainWindow(QMainWindow):
         # layout: patch | preview ; sotto Design/Live
         left = QWidget(); lv = QVBoxLayout(left); lv.addWidget(QLabel("Patch")); lv.addWidget(self.fixlist)
         scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setWidget(self.faders)
+        scroll.setMinimumWidth(320)
+        self.design = DesignView(self.engine, scroll)
         self.stack = QStackedWidget()
-        self.stack.addWidget(scroll); self.stack.addWidget(self.live_view)
+        self.stack.addWidget(self.design); self.stack.addWidget(self.live_view)
         top = QSplitter(); top.addWidget(left); top.addWidget(self.preview); top.setSizes([200, 900])
         main = QSplitter(Qt.Vertical); main.addWidget(top); main.addWidget(self.stack); main.setSizes([420, 280])
         self.setCentralWidget(main)
@@ -526,7 +529,7 @@ class MainWindow(QMainWindow):
 
     def _on_preview_selection(self, names):
         self._sync_list()
-        self.faders.show_fixtures(names)
+        self.faders.show_fixtures(names); self.design.set_selection(names)
         if self.bar.hl.isChecked():
             self.engine.set_highlight(names)
 

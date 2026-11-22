@@ -128,3 +128,21 @@ def test_control_dialog_dmx_and_clock():
     d.clock_chk.setChecked(False)
     assert w.midi.clock.enabled is False
     d.close(); w.close()
+
+
+def test_design_view_panels_and_dot():
+    from PySide6.QtWidgets import QApplication
+    from showsuite.ui.light_window import AddFixtureDialog, MainWindow
+    app = QApplication.instance() or QApplication([])
+    w = MainWindow()
+    d = AddFixtureDialog(w.engine, w); d.prof.setCurrentIndex(1); d.count.setValue(2); d.create()
+    w._refresh_list(); w.show_view(0); w.show()
+    w.preview.set_selection(["RGB 1", "RGB 2"] if False else [f.name for f in w.engine.project.patch.fixtures], emit=True)
+    dv = w.design
+    assert dv.panels["dimmer"].isVisibleTo(dv) and dv.panels["color"].isVisibleTo(dv)
+    assert not dv.panels["shutter"].isVisibleTo(dv)
+    dv.panels["color"]._rgb(__import__("PySide6.QtGui", fromlist=["QColor"]).QColor("#ff0000"))
+    assert w.engine.mixer.render(1)[0] == 255 and dv.panels["color"].dot.toolTip().startswith("Sovrascritto")
+    dv.panels["color"].dot.click()
+    assert w.engine.mixer.render(1)[0] == 0
+    w.close()
