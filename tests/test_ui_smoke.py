@@ -146,3 +146,26 @@ def test_design_view_panels_and_dot():
     dv.panels["color"].dot.click()
     assert w.engine.mixer.render(1)[0] == 0
     w.close()
+
+
+def test_patch_window_patch_and_change_mode():
+    from PySide6.QtWidgets import QApplication
+    from showsuite.light.fixtures import generic_rgb
+    from showsuite.ui.light_window import MainWindow
+    from showsuite.ui.patch_window import PatchPopover, PatchWindow
+    app = QApplication.instance() or QApplication([])
+    w = MainWindow(); pw = PatchWindow(w.engine, w)
+    pw.models.setCurrentRow(1)
+    key = pw.models.currentItem().data(0x0100)
+    pop = PatchPopover(pw, 10, None, key); pop.count.setValue(3); pop.name.setText("P")
+    pw.commit(pop)
+    fx = w.engine.project.patch.fixtures
+    assert [(f.name, f.address) for f in fx] == [("P 1", 10), ("P 2", 13), ("P 3", 16)] or len(fx) == 3
+    assert pw.grid.fixture_at(fx[0].address) is fx[0] and pw.grid.fixture_at(500) is None
+    pop2 = PatchPopover(pw, fx[0].address, fx[0], None); pop2.addr_s.setValue(fx[1].address)
+    import pytest as _p
+    from showsuite.light.fixtures import PatchError
+    with _p.raises(PatchError):
+        pw.commit(pop2)
+    assert len(w.engine.project.patch.fixtures) == 3 and fx[0] in w.engine.project.patch.fixtures
+    w.close()

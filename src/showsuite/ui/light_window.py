@@ -18,6 +18,7 @@ from ..light.control.midi import MidiController
 from ..light.control.osc import OscServer
 from . import theme
 from .design_view import DesignView
+from .patch_window import PatchWindow
 from .live_view import LiveView
 from .preview import PreviewWidget
 from ..light.effects import WAVES, Effect
@@ -541,6 +542,7 @@ class MainWindow(QMainWindow):
         v = self.menuBar().addMenu("Vista")
         act(v, "Design", lambda: self.show_view(0), "Ctrl+D"); act(v, "Live", lambda: self.show_view(1), "Ctrl+L")
         p = self.menuBar().addMenu("Patch")
+        act(p, "Finestra Patch…", self.patch_window, "Ctrl+P")
         act(p, "Aggiungi fixture…", self.add_fixture); act(p, "Rimuovi selezionati", self.remove_fixture)
         act(p, "Importa profilo OFL…", self.import_ofl)
         act(p, "Azzera valori", self.clear_values)
@@ -549,6 +551,12 @@ class MainWindow(QMainWindow):
         act(p, "Sequenza: termina e crea cue…", self.finish_sequence)
         o = self.menuBar().addMenu("Uscite"); act(o, "Configura uscite…", self.outputs)
         c = self.menuBar().addMenu("Controllo"); act(c, "MIDI / OSC…", self.control)
+
+    def patch_window(self):
+        d = PatchWindow(self.engine, self)
+        d.changed.connect(self._refresh_list)
+        d.exec()
+        self._refresh_list(); self.preview.update()
 
     def _retitle(self):
         self.setWindowTitle(f"ShowSuite Light — {self.engine.project.name}")
