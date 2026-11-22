@@ -32,6 +32,8 @@ class PreviewWidget(QWidget):
         self.setFocusPolicy(Qt.StrongFocus)
 
     # --- selezione ---
+    tint = (14, 15, 18)   # sfondo adattivo: segue il colore predominante delle luci
+
     def set_selection(self, names: list[str], emit: bool = True) -> None:
         valid = {f.name for f in self.engine.project.patch.fixtures}
         names = [n for n in names if n in valid]
@@ -75,7 +77,7 @@ class PreviewWidget(QWidget):
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        p.fillRect(self.rect(), QColor(14, 15, 18))
+        p.fillRect(self.rect(), QColor(*self.tint))
         p.setPen(QPen(QColor(38, 40, 48), 1))
         for gx in range(0, self.width(), 40):
             for gy in range(0, self.height(), 40):

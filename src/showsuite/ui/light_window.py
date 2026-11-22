@@ -5,7 +5,7 @@ import sys
 
 from PySide6.QtCore import QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QBrush, QColor, QPainter, QPen
-from PySide6.QtWidgets import (QStackedWidget, QToolBar, QAbstractItemView, QApplication, QComboBox, QDialog, QDialogButtonBox,
+from PySide6.QtWidgets import (QTreeWidget, QTreeWidgetItem, QStackedWidget, QToolBar, QAbstractItemView, QApplication, QComboBox, QDialog, QDialogButtonBox,
                                QCheckBox, QDockWidget, QDoubleSpinBox, QFileDialog, QFormLayout, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QMainWindow, QMessageBox, QPushButton, QScrollArea, QSlider,
                                QSpinBox, QSplitter, QVBoxLayout, QWidget)
@@ -26,6 +26,9 @@ from ..light.preset import Preset
 from ..light.engine import LightEngine
 from ..light.fixtures import FixtureInstance, PatchError
 from ..light.fixtures.ofl import OflImportError
+
+SHORTCUT_TEXT = "D Dimmer   C Color   G Gobo\nP Position   S Shutter   M Prism\nF Focus   Z Zoom   I Iris   R Frost\nO Overrides"
+
 
 class FaderPanel(QWidget):
     """Proprietà del primo fixture selezionato; i valori vanno a tutta la selezione."""
@@ -418,9 +421,6 @@ class TransportBar(QToolBar):
         self.out.toggled.connect(win._toggle_output)
         self.design = QPushButton("Design"); self.design.setCheckable(True)
         self.live = QPushButton("Live"); self.live.setCheckable(True)
-        for w in (self.design, self.live):
-            self.addWidget(w)
-        self.addSeparator()
         self.addWidget(QLabel("BPM")); self.addWidget(self.bpm); self.addWidget(tap)
         self.addSeparator()
         self.addWidget(QLabel("Master")); self.addWidget(self.master)
@@ -463,17 +463,60 @@ class MainWindow(QMainWindow):
         self.design = DesignView(self.engine, scroll)
         self.stack = QStackedWidget()
         self.stack.addWidget(self.design); self.stack.addWidget(self.live_view)
-        top = QSplitter(); top.addWidget(left); top.addWidget(self.preview); top.setSizes([200, 900])
-        main = QSplitter(Qt.Vertical); main.addWidget(top); main.addWidget(self.stack); main.setSizes([420, 280])
-        self.setCentralWidget(main)
+        self.palette_tree = QTreeWidget(); self.palette_tree.setHeaderHidden(True)
+        self.palette_tree.itemDoubleClicked.connect(self._apply_preset_item)
+        self.shortcuts = QLabel(SHORTCUT_TEXT); self.shortcuts.setStyleSheet("color:#8b90a0;padding:6px;")
+        right = QWidget(); rv = QVBoxLayout(right); rv.setContentsMargins(0, 0, 0, 0)
+        rv.addWidget(QLabel("<b>Preset Palette</b>")); rv.addWidget(self.palette_tree, 1)
+        rv.addWidget(QLabel("<b>Shortcuts</b>")); rv.addWidget(self.shortcuts)
+        top = QSplitter(); top.addWidget(left); top.addWidget(self.preview); top.addWidget(right)
+        top.setSizes([180, 760, 220])
         self.bar = TransportBar(self)
+        tabs = QWidget(); th = QHBoxLayout(tabs); th.setContentsMargins(8, 4, 8, 0); th.addStretch()
+        for b in (self.bar.design, self.bar.live):
+            b.setStyleSheet("QPushButton{border-radius:13px;padding:4px 22px;min-height:18px;}"); th.addWidget(b)
+        th.addStretch()
+        bottom = QWidget(); bv = QVBoxLayout(bottom); bv.setContentsMargins(0, 0, 0, 0); bv.setSpacing(0)
+        bv.addWidget(tabs); bv.addWidget(self.stack)
+        main = QSplitter(Qt.Vertical); main.addWidget(top); main.addWidget(bottom); main.setSizes([420, 280])
+        self.setCentralWidget(main)
         self.addToolBar(self.bar)
         self.bar.design.clicked.connect(lambda: self.show_view(0))
         self.bar.live.clicked.connect(lambda: self.show_view(1))
         self.show_view(1)
         self._menus()
         self.timer = QTimer(self); self.timer.timeout.connect(self._tick); self.timer.start(40)
-        self._retitle(); self._refresh_list()
+        self._retitle(); self._refresh_list(); self._refresh_palette()
+
+    def _apply_preset_item(self, item, _col=0):
+        pr = item.data(0, Qt.UserRole)
+        names = self.selected_names()
+        if pr is None or not names:
+            return
+        for n in names:
+            for ch, v in pr.values.items():
+                try:
+                    self.engine.set_value(n, ch, v)
+                except KeyError:
+                    pass
+        self.design.refresh_dots()
+
+    def _refresh_palette(self):
+        self.palette_tree.clear()
+        for pal in self.engine.project.palettes:
+            top = QTreeWidgetItem([pal.name]); self.palette_tree.addTopLevelItem(top)
+            for pr in pal.presets:
+                it = QTreeWidgetItem([pr.name]); it.setData(0, Qt.UserRole, pr); top.addChild(it)
+        self.palette_tree.expandAll()
+
+    def _update_tint(self):
+        fx = self.engine.project.patch.fixtures
+        r = g = b = 0
+        for f in fx:
+            c = self.engine.fixture_color(f); r += c[0]; g += c[1]; b += c[2]
+        n = max(1, len(fx)); base = (14, 15, 18)
+        a = 0.22   # intensità del riflesso
+        self.preview.tint = tuple(int(base[i] + (c / n - base[i]) * a) for i, c in enumerate((r, g, b)))
 
     def show_view(self, i: int) -> None:
         self.stack.setCurrentIndex(i)
@@ -643,6 +686,9 @@ class MainWindow(QMainWindow):
         if not self.engine.output:
             self.engine.live.update()  # senza output il Preview deve comunque muoversi
         self.livedock.sync()
+        self._tint_n = getattr(self, '_tint_n', 0) + 1
+        if self._tint_n % 5 == 0:
+            self._update_tint()
         self.preview.update()
         errs = self.engine.output_errors()
         self.statusBar().showMessage(errs[-1] if errs else "")
@@ -656,7 +702,7 @@ class MainWindow(QMainWindow):
             self.dmxin.mappings = proj.dmx_mappings
         self.engine.clear_programmer()
         self.preview.set_selection([], emit=False); self.faders.show_fixtures([])
-        self._retitle(); self._refresh_list()
+        self._retitle(); self._refresh_list(); self._refresh_palette()
         self.engine.live.active.clear(); self.live_view.rebuild()
 
     def new(self):
