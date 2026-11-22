@@ -13,6 +13,7 @@ from .posfx import PositionEffect
 from .fixtures import ChannelDef, FixtureInstance, FixtureProfile, Patch
 from .control.dmxin import DmxMapping
 from .control.midi import MidiMapping
+from .stage import StageShape
 from .live import CueList, CueListStep, LiveButton, LiveCue, LivePage
 from .preset import Palette, Preset
 
@@ -49,6 +50,8 @@ class Project:
     midi_mappings: list[MidiMapping] = field(default_factory=list)
     osc_port: int = 21600
     dmx_mappings: list[DmxMapping] = field(default_factory=list)
+    shapes: list[StageShape] = field(default_factory=list)   # tralicci, linee, testi del Preview
+    background: bytes | None = None                           # immagine di sfondo (PNG/JPG) incorporata
 
 
 def _cue_to_dict(c: LiveCue) -> dict:
@@ -123,9 +126,12 @@ def save(project: Project, path: str) -> None:
                                    "steps": [vars(x) for x in p.cuelist.steps]} if p.cuelist else None)}
                      for p in project.pages],
            "midi_mappings": [vars(m) for m in project.midi_mappings], "osc_port": project.osc_port,
-           "dmx_mappings": [vars(m) for m in project.dmx_mappings]}
+           "dmx_mappings": [vars(m) for m in project.dmx_mappings],
+           "shapes": [vars(sh) for sh in project.shapes], "has_background": project.background is not None}
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("project.json", json.dumps(doc, indent=2, ensure_ascii=False))
+        if project.background is not None:
+            z.writestr("assets/background", project.background)
         for pid, prof in profiles.items():
             z.writestr(f"profiles/{pid}.json", json.dumps(_profile_to_dict(prof), indent=2))
 
@@ -138,7 +144,10 @@ def load(path: str) -> Project:
             raise ValueError(f"versione progetto non supportata: {ver}")
         profiles = {n.split("/")[-1][:-5]: _profile_from_dict(json.loads(z.read(n)))
                     for n in z.namelist() if n.startswith("profiles/") and n.endswith(".json")}
+        background = z.read("assets/background") if "assets/background" in z.namelist() else None
     proj = Project(name=doc["name"])
+    proj.background = background
+    proj.shapes = [StageShape(**sh) for sh in doc.get("shapes", [])]
     for f in doc["fixtures"]:
         proj.patch.add(FixtureInstance(f["name"], profiles[f["profile"]], f["universe"],
                                        f["address"], f.get("x", 0.5), f.get("y", 0.5),

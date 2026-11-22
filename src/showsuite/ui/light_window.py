@@ -438,6 +438,7 @@ class TransportBar(QToolBar):
         self.clear_ov = QPushButton("Azzera"); self.clear_ov.setToolTip("Rimuove tutti gli override (programmer)")
         self.clear_ov.clicked.connect(win.clear_values)
         self.edit = QPushButton("Edit"); self.edit.setCheckable(True)
+        self.edit.toggled.connect(lambda on: win.act_edit_preview.setChecked(on) if hasattr(win, 'act_edit_preview') else None)
         self.edit.setToolTip("Modifica Preview / Live")
         self.add_btn = QPushButton("+"); self.add_btn.setToolTip("Aggiungi preset dai valori correnti")
         self.search = QLineEdit(); self.search.setPlaceholderText("Cerca…"); self.search.setMaximumWidth(150)
@@ -582,9 +583,31 @@ class MainWindow(QMainWindow):
         act(p, "Registra cue dalla selezione…", self.record_cue, "Ctrl+R")
         act(p, "Sequenza: aggiungi step dai valori", self.add_step, "Ctrl+Shift+R")
         act(p, "Sequenza: termina e crea cue…", self.finish_sequence)
+        pv = self.menuBar().addMenu("Preview")
+        self.act_edit_preview = QAction("Modalità modifica", self, checkable=True)
+        self.act_edit_preview.toggled.connect(self.set_preview_edit); pv.addAction(self.act_edit_preview)
+        for lab, tool in (("Aggiungi traliccio", "truss"), ("Aggiungi linea", "line"), ("Aggiungi testo", "text")):
+            act(pv, lab + "…", lambda t=tool: self.pick_tool(t))
+        act(pv, "Immagine di sfondo…", self.load_background); act(pv, "Rimuovi sfondo", self.clear_background)
         o = self.menuBar().addMenu("Uscite"); act(o, "Configura uscite…", self.outputs)
         c = self.menuBar().addMenu("Controllo"); act(c, "MIDI / OSC…", self.control)
         act(c, "External Control Log…", self.show_control_log); act(c, "DMX Monitor…", self.show_dmx_monitor)
+
+    def set_preview_edit(self, on: bool):
+        self.preview.set_edit_mode(on)
+        self.bar.edit.blockSignals(True); self.bar.edit.setChecked(on); self.bar.edit.blockSignals(False)
+
+    def pick_tool(self, tool: str):
+        self.act_edit_preview.setChecked(True); self.preview.set_tool(tool)
+        self.statusBar().showMessage("Trascina nel Preview per disegnare" if tool != "text" else "Clic nel Preview per inserire il testo")
+
+    def load_background(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Immagine di sfondo", "", "Immagini (*.png *.jpg *.jpeg *.webp)")
+        if path:
+            self.engine.project.background = open(path, "rb").read(); self.preview.update()
+
+    def clear_background(self):
+        self.engine.project.background = None; self.preview.update()
 
     def patch_window(self):
         d = PatchWindow(self.engine, self)

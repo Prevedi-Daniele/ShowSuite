@@ -4,10 +4,11 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QBrush, QColor, QLinearGradient, QPainter, QPen, QPolygonF
+from PySide6.QtGui import QPixmap, QBrush, QColor, QLinearGradient, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QInputDialog, QMenu, QWidget
 
 from ..light.engine import LightEngine
+from ..light.stage import ALIGN_MODES, StageShape, align, distribute
 from .theme import ACCENT
 
 BEAM_LEN = 130.0
@@ -28,6 +29,11 @@ class PreviewWidget(QWidget):
         self._typed = ""
         self._type_timer = QTimer(self, singleShot=True, interval=1200)
         self._type_timer.timeout.connect(lambda: setattr(self, "_typed", ""))
+        self.edit_mode = False
+        self.tool: str | None = None          # "truss" | "line" | "text" in modifica
+        self.sel_shape: StageShape | None = None
+        self._shape_new: StageShape | None = None
+        self._bg_cache: tuple[bytes, QPixmap] | None = None
         self.setMinimumSize(420, 300)
         self.setFocusPolicy(Qt.StrongFocus)
 
@@ -73,6 +79,65 @@ class PreviewWidget(QWidget):
                                 origin.y() + math.cos(t) * length / math.cos(min(half, 1.2))))
         return poly
 
+    # --- sfondo e scena ---
+    def _paint_background(self, p: QPainter) -> None:
+        data = self.engine.project.background
+        if not data:
+            return
+        if self._bg_cache is None or self._bg_cache[0] is not data:
+            pm = QPixmap(); pm.loadFromData(data); self._bg_cache = (data, pm)
+        pm = self._bg_cache[1]
+        if pm.isNull():
+            return
+        sc = pm.scaled(self.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+        p.setOpacity(0.55)
+        p.drawPixmap((self.width() - sc.width()) // 2, (self.height() - sc.height()) // 2, sc)
+        p.setOpacity(1.0)
+
+    def _paint_shapes(self, p: QPainter) -> None:
+        W, H = self.width(), self.height()
+        shapes = list(self.engine.project.shapes) + ([self._shape_new] if self._shape_new else [])
+        for sh in shapes:
+            col = QColor(sh.color)
+            if sh is self.sel_shape and self.edit_mode:
+                col = QColor(ACCENT)
+            if sh.kind == "text":
+                p.setPen(col); f = p.font(); f.setPointSize(14); f.setBold(True); p.setFont(f)
+                p.drawText(QPointF(sh.x1 * W, sh.y1 * H), sh.text or "Testo")
+                f.setPointSize(10); f.setBold(False); p.setFont(f)
+                continue
+            a, b = QPointF(sh.x1 * W, sh.y1 * H), QPointF(sh.x2 * W, sh.y2 * H)
+            if sh.kind == "line":
+                p.setPen(QPen(col, 3)); p.drawLine(a, b); continue
+            # traliccio: due correnti paralleli con diagonali
+            d = b - a; L = math.hypot(d.x(), d.y())
+            if L < 1:
+                continue
+            n = QPointF(-d.y() / L, d.x() / L) * 6
+            p.setPen(QPen(col, 2))
+            p.drawLine(a + n, b + n); p.drawLine(a - n, b - n)
+            steps = max(1, int(L // 14)); p.setPen(QPen(col, 1))
+            for i in range(steps):
+                t0, t1 = i / steps, (i + 1) / steps
+                p0, p1 = a + d * t0, a + d * t1
+                p.drawLine(p0 + (n if i % 2 == 0 else -n), p1 + (-n if i % 2 == 0 else n))
+
+    def _shape_at(self, pos: QPointF) -> StageShape | None:
+        if not self.width() or not self.height():
+            return None
+        x, y = pos.x() / self.width(), pos.y() / self.height()
+        best = min(self.engine.project.shapes, key=lambda s: s.distance(x, y), default=None)
+        return best if best and best.distance(x, y) < 0.02 else None
+
+    def set_tool(self, tool: str | None) -> None:
+        self.tool = tool; self.edit_mode = self.edit_mode or tool is not None
+
+    def set_edit_mode(self, on: bool) -> None:
+        self.edit_mode = on
+        if not on:
+            self.tool = None; self.sel_shape = None
+        self.update()
+
     # --- disegno ---
     def paintEvent(self, _):
         p = QPainter(self)
@@ -82,6 +147,8 @@ class PreviewWidget(QWidget):
         for gx in range(0, self.width(), 40):
             for gy in range(0, self.height(), 40):
                 p.drawPoint(gx, gy)
+        self._paint_background(p)
+        self._paint_shapes(p)
         fixtures = self.engine.project.patch.fixtures
         # raggi sotto ai simboli
         for fx in fixtures:
@@ -132,6 +199,20 @@ class PreviewWidget(QWidget):
                 self.set_selection([name])
             self._context_menu(e.globalPosition().toPoint())
             return
+        if self.edit_mode and not name:
+            if self.tool and self.width() and self.height():
+                x, y = pos.x() / self.width(), pos.y() / self.height()
+                if self.tool == "text":
+                    t, ok = QInputDialog.getText(self, "Testo", "Testo:")
+                    if ok and t:
+                        self.engine.project.shapes.append(StageShape("text", x, y, text=t))
+                    self.update(); return
+                self._shape_new = StageShape(self.tool, x, y, x, y)
+                self._drag_from = pos; return
+            hit = self._shape_at(pos)
+            self.sel_shape = hit
+            if hit:
+                self._drag_from = pos; self._shape_drag = (pos, ) ; self.update(); return
         if name:
             if ctrl:
                 sel = list(self.selection)
@@ -154,7 +235,13 @@ class PreviewWidget(QWidget):
         if self._drag_from is None:
             return
         pos = e.position()
-        if self._rubber is not None:
+        if self._shape_new is not None:
+            self._shape_new.x2, self._shape_new.y2 = pos.x() / self.width(), pos.y() / self.height()
+        elif getattr(self, "_shape_drag", None) and self.sel_shape:
+            last = self._shape_drag[0]
+            self.sel_shape.move((pos.x() - last.x()) / self.width(), (pos.y() - last.y()) / self.height())
+            self._shape_drag = (pos,)
+        elif self._rubber is not None:
             self._rubber = QRectF(self._drag_from, pos).normalized()
         elif self._drag_start_pos and self.width() and self.height():
             dx = (pos.x() - self._drag_from.x()) / self.width()
@@ -165,6 +252,11 @@ class PreviewWidget(QWidget):
         self.update()
 
     def mouseReleaseEvent(self, _):
+        if self._shape_new is not None:
+            sh = self._shape_new; self._shape_new = None
+            if abs(sh.x2 - sh.x1) + abs(sh.y2 - sh.y1) > 0.01:
+                self.engine.project.shapes.append(sh); self.sel_shape = sh
+        self._shape_drag = None
         if self._rubber is not None:
             inside = [f.name for f in self.engine.project.patch.fixtures
                       if self._rubber.contains(self._pos(f))]
@@ -184,6 +276,8 @@ class PreviewWidget(QWidget):
             i = names.index(self.current) if self.current in names else -1
             step = -1 if e.key() == Qt.Key_Backtab else 1
             self.set_selection([names[(i + step) % len(names)]])
+        elif e.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self.edit_mode and self.sel_shape:
+            self.engine.project.shapes.remove(self.sel_shape); self.sel_shape = None
         elif e.key() == Qt.Key_A and e.modifiers() & Qt.ControlModifier:
             self.set_selection([f.name for f in self.engine.project.patch.fixtures])
         elif e.text() and e.text().isprintable() and not (e.modifiers() & Qt.ControlModifier):
@@ -200,6 +294,13 @@ class PreviewWidget(QWidget):
             return
         fxs = [self.engine.project.patch.find(n) for n in self.selection]
         m = QMenu(self)
+        if len(fxs) >= 2:
+            al = m.addMenu("Allinea")
+            for mode, lab in zip(ALIGN_MODES, ("A sinistra", "A destra", "In alto", "In basso", "Centro orizz.", "Centro vert.")):
+                al.addAction(lab, lambda mode=mode: (align(fxs, mode), self.update()))
+            m.addAction("Distribuisci orizzontalmente", lambda: (distribute(fxs, "h"), self.update()))
+            m.addAction("Distribuisci verticalmente", lambda: (distribute(fxs, "v"), self.update()))
+            m.addSeparator()
         m.addAction("Ruota +15°", lambda: self._rotate(fxs, 15))
         m.addAction("Ruota −15°", lambda: self._rotate(fxs, -15))
         m.addAction("Angolo del raggio…", lambda: self._ask_angle(fxs))
