@@ -227,3 +227,31 @@ def test_live_cue_position_and_color_effects(tmp_path):
     f = tmp_path / "p.showsuite-light"; pj.save(e.project, str(f)); q = pj.load(str(f))
     c2 = q.cues[0]
     assert c2.position_fx.pattern == "Pan Track" and c2.color_fx.swatches == [(255, 0, 0), (0, 0, 255)]
+
+
+def test_fader_and_exclusive_group_and_save(tmp_path):
+    from showsuite.light import project as pj
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.fixtures import FixtureInstance, generic_rgb
+    from showsuite.light.live import LiveButton, LiveCue, LivePage
+    from showsuite.light.preset import Preset
+    t = [0.0]
+    e = LightEngine(now=lambda: t[0]); e.project.patch.add(FixtureInstance("P", generic_rgb(), 1, 1))
+    red = LiveCue("R", ["P"], Preset("r", {"Red": 200}), fade_in=1.0, fade_out=1.0, toggle=True)
+    blue = LiveCue("B", ["P"], Preset("b", {"Blue": 200}), fade_in=1.0, fade_out=1.0, toggle=True)
+    e.project.cues += [red, blue]
+    e.live.trigger_exclusive(red, [red, blue]); t[0] = 1.0; e.live.update()
+    assert e.mixer.render(1)[0] == 200
+    e.live.trigger_exclusive(blue, [red, blue]); t[0] = 1.5; e.live.update()
+    d = e.mixer.render(1); assert 90 <= d[0] <= 110 and 90 <= d[2] <= 110      # crossfade a metà
+    t[0] = 3.0; e.live.update(); d = e.mixer.render(1); assert d[0] == 0 and d[2] == 200
+    # fader
+    green = LiveCue("G", ["P"], Preset("g", {"Green": 200}))
+    e.live.set_fader(green, 0.5); e.live.update(); assert e.mixer.render(1)[1] == 100
+    e.live.set_fader(green, 0.0); e.live.update(); assert e.mixer.render(1)[1] == 0
+    # persistenza cornici/tipo/gruppo
+    e.project.pages = [LivePage("P1", [LiveButton("R", frame=0, group="f0"), LiveButton("G", frame=1, kind="fader")],
+                                frames=["Colori", "Dimmer"])]
+    f = tmp_path / "x.showsuite-light"; pj.save(e.project, str(f)); q = pj.load(str(f))
+    pg = q.pages[0]
+    assert pg.frames == ["Colori", "Dimmer"] and pg.buttons[1].kind == "fader" and pg.buttons[0].group == "f0"

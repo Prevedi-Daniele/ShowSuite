@@ -50,7 +50,11 @@ class CueButton(QPushButton):
         cue, live = self.cue(), self.view.engine.live
         if cue is None or self.view.edit_mode:
             return
-        if self.btn.mode == "flash":
+        if self.btn.group:
+            others = [c for b in self.page.buttons if b.group == self.btn.group and b is not self.btn
+                      for c in self.view.engine.project.cues if c.name == b.cue]
+            live.trigger_exclusive(cue, others, self.page.priority)
+        elif self.btn.mode == "flash":
             live.start(cue, self.page.priority)
         else:
             live.trigger(cue, self.page.priority)
@@ -62,13 +66,7 @@ class CueButton(QPushButton):
                 self.view.engine.live.release(cue)
 
     def _menu(self, pos):
-        m = QMenu(self)
-        m.addAction("Modalità: " + ("Toggle" if self.btn.mode == "flash" else "Flash"),
-                    lambda: setattr(self.btn, "mode", "toggle" if self.btn.mode == "flash" else "flash"))
-        m.addAction("Colore…", self._color)
-        m.addAction("Etichetta…", self._label)
-        m.addAction("Rimuovi dalla pagina", self._remove)
-        m.exec(self.mapToGlobal(pos))
+        self.view.button_menu(self, pos)
 
     def _color(self):
         c = QColorDialog.getColor(QColor(self.btn.color), self, "Colore pulsante")
@@ -83,6 +81,37 @@ class CueButton(QPushButton):
     def _remove(self):
         self.page.buttons.remove(self.btn)
         self.removed.emit()
+
+
+class FaderButton(QWidget):
+    """Fader verticale che controlla il livello di un cue (come i fader di Lightkey)."""
+
+    def __init__(self, view: "LiveView", page: LivePage, btn: LiveButton):
+        super().__init__()
+        self.view, self.page, self.btn = view, page, btn
+        self.slider = QSlider(Qt.Vertical); self.slider.setRange(0, 100); self.slider.setMinimumHeight(90)
+        col = QColor(btn.color)
+        self.slider.setStyleSheet(f"QSlider::groove:vertical{{background:#2a2d36;width:34px;border-radius:4px;}}"
+                                  f"QSlider::sub-page:vertical{{background:#2a2d36;}}"
+                                  f"QSlider::add-page:vertical{{background:{col.name()};border-radius:4px;}}"
+                                  f"QSlider::handle:vertical{{height:3px;background:#fff;}}")
+        self.label = QLabel(btn.label or btn.cue); self.label.setAlignment(Qt.AlignCenter)
+        self.slider.valueChanged.connect(self._moved)
+        v = QVBoxLayout(self); v.setContentsMargins(2, 2, 2, 2)
+        v.addWidget(self.slider, 1, Qt.AlignHCenter); v.addWidget(self.label)
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(lambda pos: self.view.button_menu(self, pos))
+
+    def cue(self):
+        return next((c for c in self.view.engine.project.cues if c.name == self.btn.cue), None)
+
+    def _moved(self, v: int) -> None:
+        cue = self.cue()
+        if cue and not self.view.edit_mode:
+            self.view.engine.live.set_fader(cue, v / 100, self.page.priority)
+
+    def restyle(self, active: bool) -> None:
+        pass
 
 
 class LiveView(QWidget):
@@ -114,9 +143,9 @@ class LiveView(QWidget):
         self.add_btn = QPushButton("+ Pagina"); self.add_btn.clicked.connect(self.add_page); self.add_btn.hide()
         top = QHBoxLayout(); top.addWidget(self.page_btn); top.addStretch(); top.addWidget(self.add_btn); top.addWidget(self.edit_btn)
         # cornice
-        self.frame = QFrame(); self.frame.setObjectName("frame")
-        self.frame.setStyleSheet("#frame{background:rgba(255,255,255,0.05);border-radius:6px;}")
-        self.grid = QGridLayout(self.frame); self.grid.setSpacing(3); self.grid.setAlignment(Qt.AlignTop)
+        self.frame = QWidget(); self.frames_box = QHBoxLayout(self.frame); self.frames_box.setContentsMargins(0, 0, 0, 0)
+        self.frames_box.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.frame_widgets: list[QFrame] = []
         self.empty = QLabel("Nessun pulsante: registra un cue dalla selezione (Ctrl+R)")
         self.empty.setStyleSheet("color:#8b90a0;"); self.empty.setAlignment(Qt.AlignCenter)
         self.cl_view: CueListView | None = None
@@ -130,8 +159,7 @@ class LiveView(QWidget):
     def set_edit(self, on: bool) -> None:
         self.edit_mode = on
         self.add_btn.setVisible(on)
-        self.frame.setStyleSheet("#frame{background:rgba(255,255,255,0.05);border-radius:6px;"
-                                 + ("border:1px dashed #3a8bff;}" if on else "}"))
+        self._fill_grid()
 
     def _page_menu(self) -> None:
         m = QMenu(self)
@@ -181,9 +209,13 @@ class LiveView(QWidget):
         for w in self.widgets:
             w.setParent(None); w.deleteLater()
         self.widgets.clear()
+        for f in self.frame_widgets:
+            f.setParent(None); f.deleteLater()
+        self.frame_widgets.clear()
         p = self.page
         self.page_btn.setText((p.name if p else "Nessuna pagina") + " ⌄")
-        self.empty.setVisible(not (p and p.buttons)); self.frame.setVisible(bool(p and p.buttons))
+        has = bool(p and p.buttons)
+        self.empty.setVisible(not has); self.frame.setVisible(has)
         if self.cl_view:
             self.cl_view.setParent(None); self.cl_view.deleteLater(); self.cl_view = None
         if p and p.cuelist:
@@ -191,11 +223,76 @@ class LiveView(QWidget):
             self.empty.setVisible(False)
         if not p:
             return
-        for i, b in enumerate(p.buttons):
-            w = CueButton(self, p, b)
-            w.removed.connect(self._fill_grid)
-            self.grid.addWidget(w, i // p.columns, i % p.columns)
-            self.widgets.append(w)
+        nframes = max(len(p.frames), max((b.frame for b in p.buttons), default=0) + 1)
+        while len(p.frames) < nframes:
+            p.frames.append("")
+        for fi in range(nframes):
+            members = [b for b in p.buttons if b.frame == fi]
+            if not members and not self.edit_mode:
+                continue
+            box = QFrame(); box.setObjectName("frame")
+            box.setStyleSheet("#frame{background:rgba(255,255,255,0.05);border-radius:6px;"
+                              + ("border:1px dashed #3a8bff;" if self.edit_mode else "") + "}")
+            v = QVBoxLayout(box); v.setContentsMargins(6, 6, 6, 6)
+            if p.frames[fi] or self.edit_mode:
+                t = QLabel(p.frames[fi] or "(senza titolo)"); t.setStyleSheet("color:#8b90a0;")
+                t.setContextMenuPolicy(Qt.CustomContextMenu)
+                t.customContextMenuRequested.connect(lambda pos, fi=fi: self._frame_menu(fi))
+                v.addWidget(t)
+            grid = QGridLayout(); grid.setSpacing(3); grid.setAlignment(Qt.AlignTop); v.addLayout(grid)
+            btns = [b for b in members if b.kind == "button"]; fads = [b for b in members if b.kind == "fader"]
+            cols = 2 if len(btns) > 1 else 1
+            for i, b in enumerate(btns):
+                w = CueButton(self, p, b); w.removed.connect(self._fill_grid)
+                grid.addWidget(w, i // cols, i % cols); self.widgets.append(w)
+            for j, b in enumerate(fads):
+                w = FaderButton(self, p, b); grid.addWidget(w, 0, cols + j, max(1, (len(btns) + 1) // 2), 1)
+                self.widgets.append(w)
+            self.frames_box.addWidget(box); self.frame_widgets.append(box)
+
+    def _frame_menu(self, fi: int) -> None:
+        m = QMenu(self)
+        m.addAction("Titolo…", lambda: self._frame_title(fi))
+        m.addAction("Nuova cornice", self.add_frame)
+        m.exec(self.cursor().pos())
+
+    def _frame_title(self, fi: int) -> None:
+        t, ok = QInputDialog.getText(self, "Cornice", "Titolo:", text=self.page.frames[fi])
+        if ok:
+            self.page.frames[fi] = t; self._fill_grid()
+
+    def add_frame(self) -> None:
+        if self.page:
+            self.page.frames.append(""); self._fill_grid()
+
+    def button_menu(self, w, pos) -> None:
+        b, p = w.btn, self.page
+        m = QMenu(w)
+        if isinstance(w, CueButton):
+            m.addAction("Modalità: " + ("Toggle" if b.mode == "flash" else "Flash"),
+                        lambda: setattr(b, "mode", "toggle" if b.mode == "flash" else "flash"))
+        m.addAction("Diventa " + ("pulsante" if b.kind == "fader" else "fader"),
+                    lambda: (setattr(b, "kind", "button" if b.kind == "fader" else "fader"), self._fill_grid()))
+        m.addAction("Rimuovi dal gruppo esclusivo" if b.group else "Gruppo esclusivo (attached) con la cornice",
+                    lambda: (setattr(b, "group", "" if b.group else f"f{b.frame}"), None))
+        sub = m.addMenu("Sposta nella cornice")
+        for i in range(len(p.frames)):
+            sub.addAction(f"{i + 1}" + (f" — {p.frames[i]}" if p.frames[i] else ""),
+                          lambda i=i: (setattr(b, "frame", i), self._fill_grid()))
+        m.addAction("Colore…", lambda: self._pick_color(b))
+        m.addAction("Etichetta…", lambda: self._pick_label(b))
+        m.addAction("Rimuovi dalla pagina", lambda: (p.buttons.remove(b), self._fill_grid()))
+        m.exec(w.mapToGlobal(pos))
+
+    def _pick_color(self, b) -> None:
+        c = QColorDialog.getColor(QColor(b.color), self, "Colore")
+        if c.isValid():
+            b.color = c.name(); self._fill_grid()
+
+    def _pick_label(self, b) -> None:
+        t, ok = QInputDialog.getText(self, "Etichetta", "Testo:", text=b.label or b.cue)
+        if ok:
+            b.label = t; self._fill_grid()
 
     def add_page(self) -> None:
         name, ok = QInputDialog.getText(self, "Nuova pagina", "Nome:", text=f"Pagina {len(self.pages) + 1}")

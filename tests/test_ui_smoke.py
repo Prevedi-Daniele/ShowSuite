@@ -191,3 +191,28 @@ def test_cuelist_view_go_back_skip():
     cv.stop(); assert w.engine.live.current_step(cv.cl) is None
     lv.remove_cuelist(); assert lv.cl_view is None and lv.page.cuelist is None
     w.close()
+
+
+def test_live_view_frames_faders_and_groups():
+    from PySide6.QtWidgets import QApplication
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from showsuite.light.live import LiveCue
+    from showsuite.ui.light_window import AddFixtureDialog, MainWindow
+    from showsuite.ui.live_view import FaderButton
+    app = QApplication.instance() or QApplication([])
+    w = MainWindow()
+    d = AddFixtureDialog(w.engine, w); d.prof.setCurrentIndex(1); d.create()
+    from showsuite.light.preset import Preset
+    for n, ch in (("A", "Red"), ("B", "Blue"), ("F", "Green")):
+        w.engine.project.cues.append(LiveCue(n, ["Fixture"], Preset(n, {ch: 255}))); w.live_view.add_cue_button(n)
+    lv = w.live_view; bs = lv.page.buttons
+    bs[0].group = bs[1].group = "g"; bs[2].kind = "fader"; bs[2].frame = 1; lv._fill_grid()
+    assert len(lv.frame_widgets) == 2 and any(isinstance(x, FaderButton) for x in lv.widgets)
+    QTest.mouseClick(lv.widgets[0], Qt.LeftButton); QTest.mouseClick(lv.widgets[1], Qt.LeftButton)
+    w.engine.live.update()
+    assert w.engine.mixer.render(1)[2] == 255 and w.engine.mixer.render(1)[0] == 0   # solo B: A è stato rilasciato
+    fb = next(x for x in lv.widgets if isinstance(x, FaderButton)); fb.slider.setValue(50)
+    w.engine.live.update(); assert w.engine.mixer.render(1)[1] == 128 or w.engine.mixer.render(1)[1] == 127
+    lv.set_edit(True); assert lv.edit_mode
+    w.close()

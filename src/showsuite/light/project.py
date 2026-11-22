@@ -118,7 +118,7 @@ def save(project: Project, path: str) -> None:
                                                      for x in p.presets]} for p in project.palettes],
            "cues": [_cue_to_dict(c) for c in project.cues],
            "pages": [{"name": p.name, "priority": p.priority, "fade_time": p.fade_time,
-                      "columns": p.columns, "buttons": [vars(b) for b in p.buttons],
+                      "columns": p.columns, "frames": p.frames, "buttons": [vars(b) for b in p.buttons],
                       "cuelist": ({"name": p.cuelist.name, "loop": p.cuelist.loop, "priority": p.cuelist.priority,
                                    "steps": [vars(x) for x in p.cuelist.steps]} if p.cuelist else None)}
                      for p in project.pages],
@@ -153,7 +153,8 @@ def load(path: str) -> Project:
                            p.get("fade_time", 0.0), p.get("columns", 6),
                            (CueList(p["cuelist"]["name"], [CueListStep(**x) for x in p["cuelist"]["steps"]],
                                     p["cuelist"].get("loop", False), p["cuelist"].get("priority", 10))
-                            if p.get("cuelist") else None)) for p in doc.get("pages", [])]
+                            if p.get("cuelist") else None),
+                           list(p.get("frames", [""]))) for p in doc.get("pages", [])]
     if not proj.pages and proj.cues:   # progetti senza pagine: tutti i cue su una pagina
         proj.pages = [LivePage("Pagina 1", [LiveButton(c.name) for c in proj.cues])]
     proj.midi_mappings = [MidiMapping(**m) for m in doc.get("midi_mappings", [])]

@@ -67,6 +67,9 @@ class LiveButton:
     mode: str = "toggle"        # "toggle" | "flash" (attivo solo finché premuto)
     color: str = "#3a7bd5"
     label: str = ""
+    frame: int = 0              # indice della cornice nella pagina
+    kind: str = "button"        # "button" | "fader" (fader verticale = livello del cue)
+    group: str = ""             # stesso gruppo = pulsanti "attached": uno solo attivo, con crossfade
 
 
 @dataclass
@@ -77,6 +80,7 @@ class LivePage:
     fade_time: float = 0.0      # secondi, cambio pagina
     columns: int = 6
     cuelist: CueList | None = None   # una cuelist per pagina
+    frames: list[str] = field(default_factory=lambda: [""])   # titoli delle cornici
 
 
 class LivePlayer:
@@ -98,6 +102,34 @@ class LivePlayer:
         with self.engine.mixer.lock:
             self.active.pop(cue.name, None)
             self._begin(cue, page_priority)
+
+    def trigger_exclusive(self, cue: LiveCue, others: list[LiveCue], page_priority: int = 0) -> None:
+        """Pulsanti "attached": spegne gli altri del gruppo (con il loro fade-out) e accende questo."""
+        with self.engine.mixer.lock:
+            for o in others:
+                if o.name != cue.name:
+                    self.release(o)
+            st = self.active.get(cue.name)
+            if st and not st["releasing"]:
+                self.release(cue)        # secondo clic sul pulsante già attivo: lo spegne
+            else:
+                self.active.pop(cue.name, None)
+                self._begin(cue, page_priority)
+
+    def set_fader(self, cue: LiveCue, value: float, page_priority: int = 0) -> None:
+        """Fader: livello 0-1 del cue. A 0 il cue si spegne, sopra 0 si accende se serve."""
+        with self.engine.mixer.lock:
+            value = max(0.0, min(1.0, value))
+            st = self.active.get(cue.name)
+            if value <= 0:
+                if st:
+                    del self.active[cue.name]
+                return
+            if not st or st["releasing"]:
+                self.active.pop(cue.name, None)
+                self._begin(cue, page_priority)
+                st = self.active[cue.name]
+            st["fader"] = value
 
     def _trigger(self, cue: LiveCue, page_priority: int = 0) -> None:
         st = self.active.get(cue.name)
@@ -125,11 +157,11 @@ class LivePlayer:
             f = CURVES[st.get("curve_o") or cue.curve]
             if fo <= 0:
                 return 0.0
-            return f(max(0.0, 1 - (now - st["t1"]) / fo))
+            return f(max(0.0, 1 - (now - st["t1"]) / fo)) * st.get("fader", 1.0)
         f = CURVES[cue.curve]
         if cue.fade_in <= 0:
-            return 1.0
-        return f(min(1.0, (now - st["t0"]) / cue.fade_in))
+            return 1.0 * st.get("fader", 1.0)
+        return f(min(1.0, (now - st["t0"]) / cue.fade_in)) * st.get("fader", 1.0)
 
     @staticmethod
     def _step_values(cue: LiveCue, st: dict, beats: float) -> dict[str, float]:
