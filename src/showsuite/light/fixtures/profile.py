@@ -11,7 +11,9 @@ class ChannelDef:
     name: str            # es. "Dimmer", "Red", "Pan"
     default: int = 0     # valore a riposo (0-255, o 0-65535 se fine=True)
     fine: bool = False   # occupa 2 canali (16 bit, MSB poi LSB)
-    kind: str = ""       # "intensity" | "red" | "green" | "blue" | "white" | "amber" | "uv" | ""
+    kind: str = ""       # "intensity" | "red" | "green" | "blue" | "white" | "amber" | "uv" | "pan" | "tilt" |
+                         # "zoom" | "focus" | "iris" | "prism" | "frost" | "shutter" | "color_wheel" | "gobo_wheel" | ""
+    caps: tuple = ()     # ((dmx_da, dmx_a, tipo, etichetta), ...) per canali con intervalli (shutter, ruote)
 
     @property
     def width(self) -> int:

@@ -1,0 +1,77 @@
+import json
+import os
+
+import pytest
+
+from showsuite.light import project as pj
+from showsuite.light import properties as P
+from showsuite.light.engine import LightEngine
+from showsuite.light.fixtures import FixtureInstance
+from showsuite.light.fixtures.ofl import parse_ofl
+
+DOC = {
+    "name": "Spot", "availableChannels": {
+        "Dimmer": {"capability": {"type": "Intensity"}},
+        "Shutter": {"capabilities": [
+            {"dmxRange": [0, 9], "type": "ShutterStrobe", "shutterEffect": "Closed"},
+            {"dmxRange": [10, 19], "type": "ShutterStrobe", "shutterEffect": "Open"},
+            {"dmxRange": [20, 99], "type": "ShutterStrobe", "shutterEffect": "Strobe"}]},
+        "Pan": {"capability": {"type": "Pan"}}, "Tilt": {"capability": {"type": "Tilt"}},
+        "Zoom": {"capability": {"type": "Zoom"}},
+        "Gobo": {"capabilities": [
+            {"dmxRange": [0, 9], "type": "WheelSlot", "wheel": "Gobo Wheel", "slotNumber": 1},
+            {"dmxRange": [10, 19], "type": "WheelSlot", "wheel": "Gobo Wheel", "slotNumber": 2}]},
+        "Color": {"capabilities": [
+            {"dmxRange": [0, 9], "type": "WheelSlot", "wheel": "Color Wheel", "slotNumber": 1},
+            {"dmxRange": [10, 19], "type": "ColorPreset", "comment": "Rosso"}]},
+    },
+    "modes": [{"name": "m", "channels": ["Dimmer", "Shutter", "Pan", "Tilt", "Zoom", "Gobo", "Color"]}],
+}
+
+
+def setup():
+    (prof,) = parse_ofl(DOC, "X")
+    e = LightEngine()
+    e.project.patch.add(FixtureInstance("S1", prof, 1, 1))
+    e.project.patch.add(FixtureInstance("S2", prof, 1, 20))
+    return e, prof
+
+
+def test_ofl_kinds_and_caps():
+    _, prof = setup()
+    assert [c.kind for c in prof.channels] == ["intensity", "shutter", "pan", "tilt", "zoom", "gobo_wheel", "color_wheel"]
+    assert P.available_properties(prof) == ["dimmer", "color_wheel", "gobo_wheel", "shutter", "position", "zoom"]
+    assert prof.channel_of_kind("shutter").caps[1] == (10, 19, "ShutterStrobe", "Open")
+
+
+def test_shutter_wheel_position_zoom_and_dots():
+    e, prof = setup()
+    assert P.set_shutter(e, ["S1", "S2"], "open") == 2 and e.mixer.render(1)[1] == 14
+    P.set_shutter(e, ["S1"], "strobe", 1.0); assert e.mixer.render(1)[1] == 99
+    P.set_shutter(e, ["S1"], "closed"); assert e.mixer.render(1)[1] == 4
+    assert P.set_slot(e, ["S1"], "gobo_wheel", 1) == 1 and e.mixer.render(1)[5] == 14
+    assert P.set_slot(e, ["S1"], "gobo_wheel", 5) == 0                      # slot inesistente
+    assert [l for _, l in P.wheel_slots(prof, "color_wheel")] == ["1", "Rosso"]
+    P.set_position(e, ["S1"], pan=0.5, tilt=1.0)
+    assert e.mixer.render(1)[2] == 128 and e.mixer.render(1)[3] == 255
+    P.set_simple(e, ["S1"], "zoom", 0.5); assert e.mixer.render(1)[4] == 128
+    assert P.property_state(e, ["S1", "S2"], "shutter") == "all"            # entrambi impostati sopra
+    P.clear_property(e, ["S1"], "shutter")
+    assert P.property_state(e, ["S1"], "shutter") == "none" and e.mixer.render(1)[1] == 0
+    assert P.property_state(e, ["S1", "S2"], "shutter") == "some"
+    assert P.property_state(e, ["S1", "S2"], "position") == "some"
+    P.clear_property(e, ["S1", "S2"], "position")
+    assert P.property_state(e, ["S1", "S2"], "position") == "none"
+
+
+def test_generic_dimmer_property_for_rgb_and_roundtrip(tmp_path):
+    from showsuite.light.fixtures import generic_rgb
+    e = LightEngine()
+    e.project.patch.add(FixtureInstance("R", generic_rgb(), 1, 1))
+    assert P.available_properties(generic_rgb()) == ["dimmer", "color"]
+    assert P.property_channels(generic_rgb(), "dimmer") == ["Red", "Green", "Blue"]
+    (prof,) = parse_ofl(DOC, "X")
+    p = pj.Project("T"); p.patch.add(FixtureInstance("S", prof, 1, 1))
+    f = tmp_path / "t.showsuite-light"; pj.save(p, str(f)); q = pj.load(str(f))
+    assert q.patch.find("S").profile.channel_of_kind("shutter").caps[0][3] == "Closed"
+    assert q.patch.find("S").profile.channel_of_kind("gobo_wheel") is not None

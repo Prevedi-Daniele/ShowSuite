@@ -76,12 +76,14 @@ def _profile_id(p: FixtureProfile) -> str:
 
 def _profile_to_dict(p: FixtureProfile) -> dict:
     return {"manufacturer": p.manufacturer, "model": p.model, "mode": p.mode,
-            "channels": [{"name": c.name, "default": c.default, "fine": c.fine, "kind": c.kind} for c in p.channels]}
+            "channels": [{"name": c.name, "default": c.default, "fine": c.fine, "kind": c.kind,
+                          "caps": [list(x) for x in c.caps]} for c in p.channels]}
 
 
 def _profile_from_dict(d: dict) -> FixtureProfile:
     return FixtureProfile(d["manufacturer"], d["model"], d["mode"],
-                          tuple(ChannelDef(c["name"], c.get("default", 0), c.get("fine", False), c.get("kind", ""))
+                          tuple(ChannelDef(c["name"], c.get("default", 0), c.get("fine", False), c.get("kind", ""),
+                                      tuple(tuple(x) for x in c.get("caps", [])))
                                 for c in d["channels"]))
 
 

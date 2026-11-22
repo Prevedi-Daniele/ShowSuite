@@ -28,15 +28,45 @@ def _default(value, fine: bool) -> int:
     return max(0, min(top, int(value)))
 
 
+_SIMPLE = {"Pan": "pan", "Tilt": "tilt", "Zoom": "zoom", "Focus": "focus", "Iris": "iris",
+           "Prism": "prism", "Frost": "frost"}
+
+
+def _caps_list(spec: dict) -> list[dict]:
+    return spec.get("capabilities") or ([spec["capability"]] if "capability" in spec else [])
+
+
 def _kind(spec: dict) -> str:
-    caps = spec.get("capabilities") or ([spec["capability"]] if "capability" in spec else [])
-    for c in caps:
-        if c.get("type") == "Intensity":
+    for c in _caps_list(spec):
+        t = c.get("type")
+        if t == "Intensity":
             return "intensity"
-        if c.get("type") == "ColorIntensity":
+        if t == "ColorIntensity":
             col = str(c.get("color", "")).lower()
             return {"uv": "uv", "ultraviolet": "uv"}.get(col, col)
+        if t in _SIMPLE:
+            return _SIMPLE[t]
+        if t == "ShutterStrobe":
+            return "shutter"
+        if t == "ColorPreset":
+            return "color_wheel"
+        if t == "WheelSlot":
+            return "gobo_wheel" if "gobo" in str(c.get("wheel", "")).lower() else "color_wheel"
     return ""
+
+
+def _caps(spec: dict, kind: str) -> tuple:
+    """Intervalli utili (shutter, ruote): ((da, a, tipo, etichetta), ...)."""
+    if kind not in ("shutter", "color_wheel", "gobo_wheel"):
+        return ()
+    out = []
+    for c in _caps_list(spec):
+        rng = c.get("dmxRange")
+        if not rng or c.get("type") in ("NoFunction", "Maintenance"):
+            continue
+        label = c.get("shutterEffect") or c.get("comment") or c.get("slotNumber") or c.get("type")
+        out.append((int(rng[0]), int(rng[1]), c.get("type"), str(label)))
+    return tuple(out)
 
 
 def parse_ofl(doc: dict, manufacturer: str = "") -> list[FixtureProfile]:
@@ -78,10 +108,12 @@ def parse_ofl(doc: dict, manufacturer: str = "") -> list[FixtureProfile]:
                     adjacent = (len(fine_names) >= 1 and i + 1 < len(names) and names[i + 1] == fine_names[0])
                     name = n if n not in seen else f"{n} ({i + 1})"
                     if adjacent:
-                        chans.append(ChannelDef(name, _default(spec.get("defaultValue"), True), fine=True, kind=_kind(spec)))
+                        chans.append(ChannelDef(name, _default(spec.get("defaultValue"), True), fine=True,
+                                                kind=_kind(spec), caps=_caps(spec, _kind(spec))))
                         i += 1  # consuma il byte fine (solo 16 bit; il 24 bit resta come canale a parte)
                     else:
-                        chans.append(ChannelDef(name, _default(spec.get("defaultValue"), False), kind=_kind(spec)))
+                        chans.append(ChannelDef(name, _default(spec.get("defaultValue"), False),
+                                                kind=_kind(spec), caps=_caps(spec, _kind(spec))))
                     seen.add(n)
             i += 1
         profiles.append(FixtureProfile(manufacturer, doc["name"], mode["name"], tuple(chans)))
