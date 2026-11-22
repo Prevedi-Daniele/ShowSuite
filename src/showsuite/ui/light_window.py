@@ -424,16 +424,43 @@ class TransportBar(QToolBar):
         self.out.toggled.connect(win._toggle_output)
         self.design = QPushButton("Design"); self.design.setCheckable(True)
         self.live = QPushButton("Live"); self.live.setCheckable(True)
-        self.addWidget(QLabel("BPM")); self.addWidget(self.bpm); self.addWidget(tap)
-        self.addSeparator()
-        self.addWidget(QLabel("Master")); self.addWidget(self.master)
-        for w in (self.bo, self.fr, self.bl, self.hl):
+        CAP = ("QPushButton,QLabel#cap{background:#272a32;border:1px solid #33363f;border-radius:10px;"
+               "padding:4px 12px;min-height:16px;} QPushButton:checked{background:#3a8bff;}")
+        self.setStyleSheet(CAP)
+        self.fixtures_btn = QPushButton("Patch"); self.fixtures_btn.setToolTip("Fixture e patch (Ctrl+P)")
+        self.fixtures_btn.clicked.connect(win.patch_window)
+        self.title = QLabel(); self.title.setObjectName("cap")
+        self.lock = QPushButton("Blocca"); self.lock.setCheckable(True)
+        self.lock.setToolTip("Blocca le modifiche al Design view e al Preview")
+        self.lock.toggled.connect(win.set_locked)
+        self.overrides = QLabel("No overrides"); self.overrides.setObjectName("cap")
+        self.overrides.setMinimumWidth(220)
+        self.clear_ov = QPushButton("Azzera"); self.clear_ov.setToolTip("Rimuove tutti gli override (programmer)")
+        self.clear_ov.clicked.connect(win.clear_values)
+        self.edit = QPushButton("Edit"); self.edit.setCheckable(True)
+        self.edit.setToolTip("Modifica Preview / Live")
+        self.add_btn = QPushButton("+"); self.add_btn.setToolTip("Aggiungi preset dai valori correnti")
+        self.search = QLineEdit(); self.search.setPlaceholderText("Cerca…"); self.search.setMaximumWidth(150)
+
+        def spacer():
+            w = QWidget(); w.setSizePolicy(w.sizePolicy().horizontalPolicy().Expanding, w.sizePolicy().verticalPolicy().Preferred)
+            w.setStyleSheet("background: transparent;"); return w
+        for w in (self.fixtures_btn, self.title, self.lock, spacer(), self.overrides, self.clear_ov,
+                  self.bl, self.fr, spacer(), self.edit):
             self.addWidget(w)
-        spacer = QWidget(); spacer.setSizePolicy(spacer.sizePolicy().horizontalPolicy().Expanding,
-                                                 spacer.sizePolicy().verticalPolicy().Preferred)
-        spacer.setStyleSheet("background: transparent;")
-        self.addWidget(spacer)
-        self.addWidget(self.out)
+        self.addSeparator()
+        self.addWidget(QLabel("BPM")); self.addWidget(self.bpm); self.addWidget(tap)
+        self.addWidget(QLabel("Master")); self.addWidget(self.master)
+        for w in (self.bo, self.hl, self.out, self.add_btn, self.search):
+            self.addWidget(w)
+
+    def refresh_status(self, win: "MainWindow") -> None:
+        e = win.engine
+        n = sum(1 for v in e.values.values() if v)
+        self.overrides.setText(f"{n} fixture sovrascritti" if n else "No overrides")
+        self.overrides.setStyleSheet("color:#7fb2ff;" if n else "")
+        self.title.setText(f"<b>{e.project.name}</b><br><span style='color:#8b90a0'>"
+                           f"{'Output ON' if e.output else 'No output'}</span>")
 
     def _tap(self):
         self.parent().engine.beat.tap()
@@ -512,6 +539,9 @@ class MainWindow(QMainWindow):
             for pr in pal.presets:
                 it = QTreeWidgetItem([pr.name]); it.setData(0, Qt.UserRole, pr); top.addChild(it)
         self.palette_tree.expandAll()
+
+    def set_locked(self, on: bool):
+        self.design.setEnabled(not on); self.preview.setEnabled(not on)
 
     def _update_tint(self):
         fx = self.engine.project.patch.fixtures
@@ -708,7 +738,7 @@ class MainWindow(QMainWindow):
         self.livedock.sync()
         self._tint_n = getattr(self, '_tint_n', 0) + 1
         if self._tint_n % 5 == 0:
-            self._update_tint()
+            self._update_tint(); self.bar.refresh_status(self)
         self.preview.update()
         errs = self.engine.output_errors()
         self.statusBar().showMessage(errs[-1] if errs else "")
