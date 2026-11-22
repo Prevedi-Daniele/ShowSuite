@@ -7,7 +7,8 @@ from PySide6.QtWidgets import (QColorDialog, QFrame, QGridLayout, QHBoxLayout, Q
                                QPushButton, QSlider, QVBoxLayout, QWidget)
 
 from ..light.engine import LightEngine
-from ..light.live import LiveButton, LivePage
+from ..light.live import CueList, LiveButton, LivePage
+from .cuelist_view import CueListView
 
 
 def _text_on(color: QColor) -> str:
@@ -118,7 +119,10 @@ class LiveView(QWidget):
         self.grid = QGridLayout(self.frame); self.grid.setSpacing(3); self.grid.setAlignment(Qt.AlignTop)
         self.empty = QLabel("Nessun pulsante: registra un cue dalla selezione (Ctrl+R)")
         self.empty.setStyleSheet("color:#8b90a0;"); self.empty.setAlignment(Qt.AlignCenter)
-        mid = QVBoxLayout(); mid.addLayout(top); mid.addWidget(self.frame); mid.addWidget(self.empty); mid.addStretch(1)
+        self.cl_view: CueListView | None = None
+        self.cl_box = QVBoxLayout()
+        mid = QVBoxLayout(); mid.addLayout(top); mid.addWidget(self.frame); mid.addWidget(self.empty)
+        mid.addLayout(self.cl_box); mid.addStretch(1)
         root = QHBoxLayout(self); root.addLayout(left); root.addLayout(mid, 1)
         self.widgets: list[CueButton] = []
         self.rebuild()
@@ -135,10 +139,27 @@ class LiveView(QWidget):
             m.addAction(("✓ " if i == self.cur else "   ") + pg.name, lambda i=i: self.select_page(i))
         if self.edit_mode and self.page:
             m.addSeparator()
+            if not self.page.cuelist:
+                m.addAction("Aggiungi cuelist", self.add_cuelist)
+            else:
+                m.addAction("Rimuovi cuelist", self.remove_cuelist)
             m.addAction("Rinomina…", lambda: self._rename(self.cur))
             m.addAction("Priorità…", lambda: self._prio(self.page))
             m.addAction("Elimina pagina", lambda: self._delete(self.cur))
         m.exec(self.page_btn.mapToGlobal(self.page_btn.rect().bottomLeft()))
+
+    def add_cuelist(self) -> None:
+        """Crea la cuelist della pagina con un passo per ogni pulsante."""
+        from ..light.live import CueListStep
+        p = self.page
+        if p and not p.cuelist:
+            p.cuelist = CueList(p.name, [CueListStep(b.cue) for b in p.buttons])
+            self._fill_grid()
+
+    def remove_cuelist(self) -> None:
+        p = self.page
+        if p and p.cuelist:
+            self.engine.live.stop_cuelist(p.cuelist); p.cuelist = None; self._fill_grid()
 
     def select_page(self, i: int) -> None:
         self.cur = max(0, min(i, len(self.pages) - 1)); self._fill_grid()
@@ -163,6 +184,11 @@ class LiveView(QWidget):
         p = self.page
         self.page_btn.setText((p.name if p else "Nessuna pagina") + " ⌄")
         self.empty.setVisible(not (p and p.buttons)); self.frame.setVisible(bool(p and p.buttons))
+        if self.cl_view:
+            self.cl_view.setParent(None); self.cl_view.deleteLater(); self.cl_view = None
+        if p and p.cuelist:
+            self.cl_view = CueListView(self.engine, p); self.cl_box.addWidget(self.cl_view)
+            self.empty.setVisible(False)
         if not p:
             return
         for i, b in enumerate(p.buttons):
@@ -200,6 +226,8 @@ class LiveView(QWidget):
 
     def sync(self) -> None:
         self.bpm_btn.setText(f"{self.engine.beat.bpm:.0f} bpm")
+        if self.cl_view:
+            self.cl_view.sync()
         v = round(self.engine.grand_master * 100)
         if v != self.master.value() and not self.master.isSliderDown():
             self.master.blockSignals(True); self.master.setValue(v); self.master.blockSignals(False)

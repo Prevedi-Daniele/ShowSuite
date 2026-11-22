@@ -169,3 +169,25 @@ def test_patch_window_patch_and_change_mode():
         pw.commit(pop2)
     assert len(w.engine.project.patch.fixtures) == 3 and fx[0] in w.engine.project.patch.fixtures
     w.close()
+
+
+def test_cuelist_view_go_back_skip():
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+    from showsuite.light.live import LiveCue
+    from showsuite.ui.light_window import AddFixtureDialog, MainWindow
+    app = QApplication.instance() or QApplication([])
+    w = MainWindow()
+    d = AddFixtureDialog(w.engine, w); d.prof.setCurrentIndex(1); d.create()
+    for n in ("A", "B", "C"):
+        w.engine.project.cues.append(LiveCue(n, ["Fixture"])); w.live_view.add_cue_button(n)
+    lv = w.live_view; lv.add_cuelist(); cv = lv.cl_view
+    assert cv is not None and cv.table.rowCount() == 3
+    cv.table.item(1, 0).setCheckState(Qt.Unchecked)               # B saltato
+    assert cv.cl.steps[1].skip
+    cv.go(); assert w.engine.live.current_step(cv.cl) == 1
+    cv.go(); assert w.engine.live.current_step(cv.cl) == 3        # salta B
+    cv.back(); assert w.engine.live.current_step(cv.cl) == 2      # indietro va anche su B (goto)
+    cv.stop(); assert w.engine.live.current_step(cv.cl) is None
+    lv.remove_cuelist(); assert lv.cl_view is None and lv.page.cuelist is None
+    w.close()
