@@ -198,3 +198,32 @@ def test_cuelist_roundtrip(tmp_path):
     got = q.pages[0].cuelist
     assert [s.cue for s in got.steps] == ["A", "B", "C", "A"] and got.steps[2].skip and got.steps[1].hold == 1.0
     assert q.cues[0].speed == 1.5
+
+
+def test_live_cue_position_and_color_effects(tmp_path):
+    from showsuite.light import project as pj
+    from showsuite.light.colorfx import ColorEffect
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.fixtures import FixtureInstance
+    from showsuite.light.fixtures.ofl import parse_ofl
+    from showsuite.light.live import LiveCue
+    from showsuite.light.posfx import PositionEffect
+    (prof,) = parse_ofl({"name": "M", "availableChannels": {
+        "Pan": {"capability": {"type": "Pan"}}, "Tilt": {"capability": {"type": "Tilt"}},
+        "R": {"capability": {"type": "ColorIntensity", "color": "Red"}},
+        "G": {"capability": {"type": "ColorIntensity", "color": "Green"}},
+        "B": {"capability": {"type": "ColorIntensity", "color": "Blue"}}},
+        "modes": [{"name": "m", "channels": ["Pan", "Tilt", "R", "G", "B"]}]}, "X")
+    t = [0.0]
+    e = LightEngine(now=lambda: t[0]); e.project.patch.add(FixtureInstance("M1", prof, 1, 1))
+    cue = LiveCue("fx", ["M1"], color_fx=ColorEffect(swatches=[(255, 0, 0), (0, 0, 255)], duration=4.0, time_offset=0.0),
+                  position_fx=PositionEffect("Pan Track", 4.0, time_offset=0.0), fade_in=0.0)
+    e.project.cues.append(cue); e.live.trigger(cue)
+    e.live.update(); d = e.mixer.render(1)
+    assert d[0] == 128 and d[2] == 255 and d[4] == 0          # pan al centro, rosso
+    t[0] = 1.0; e.live.update()                               # 120 BPM: 2 battute = 1 s... un quarto di ciclo
+    d = e.mixer.render(1)
+    assert d[0] > 230 and d[2] < 255                           # pan al massimo, colore in dissolvenza
+    f = tmp_path / "p.showsuite-light"; pj.save(e.project, str(f)); q = pj.load(str(f))
+    c2 = q.cues[0]
+    assert c2.position_fx.pattern == "Pan Track" and c2.color_fx.swatches == [(255, 0, 0), (0, 0, 255)]

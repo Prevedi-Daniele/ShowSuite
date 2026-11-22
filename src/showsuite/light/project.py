@@ -7,7 +7,9 @@ import zipfile
 from dataclasses import dataclass, field
 
 from .dmx.drivers import ArtNetDriver, OpenDmxDriver, OutputDriver, SacnDriver
+from .colorfx import ColorEffect
 from .effects import Effect
+from .posfx import PositionEffect
 from .fixtures import ChannelDef, FixtureInstance, FixtureProfile, Patch
 from .control.dmxin import DmxMapping
 from .control.midi import MidiMapping
@@ -56,7 +58,10 @@ def _cue_to_dict(c: LiveCue) -> dict:
             "effects": [vars(e) for e in c.effects],
             "steps": [{"name": x.name, "values": x.values} for x in c.steps],
             "beats_per_step": c.beats_per_step, "crossfade": c.crossfade, "loop": c.loop,
-            "speed": c.speed, "dimmer": c.dimmer}
+            "speed": c.speed, "dimmer": c.dimmer,
+            "position_fx": vars(c.position_fx) if c.position_fx else None,
+            "color_fx": ({**vars(c.color_fx), "swatches": [list(x) for x in c.color_fx.swatches]}
+                         if c.color_fx else None)}
 
 
 def _cue_from_dict(d: dict) -> LiveCue:
@@ -67,7 +72,17 @@ def _cue_from_dict(d: dict) -> LiveCue:
                    d.get("toggle", True),
                    [Preset(x["name"], x["values"]) for x in d.get("steps", [])],
                    d.get("beats_per_step", 1.0), d.get("crossfade", 0.0), d.get("loop", True),
-                   d.get("speed", 1.0), d.get("dimmer", 1.0))
+                   d.get("speed", 1.0), d.get("dimmer", 1.0),
+                   PositionEffect(**d["position_fx"]) if d.get("position_fx") else None,
+                   _color_fx(d["color_fx"]) if d.get("color_fx") else None)
+
+
+def _color_fx(d: dict) -> ColorEffect:
+    d = dict(d)
+    d["swatches"] = [tuple(x) for x in d.get("swatches", [])]
+    for k in ("hue", "saturation", "brightness"):
+        d[k] = [tuple(x) for x in d.get(k, [])]
+    return ColorEffect(**d)
 
 
 def _profile_id(p: FixtureProfile) -> str:

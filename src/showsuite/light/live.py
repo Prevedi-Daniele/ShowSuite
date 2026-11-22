@@ -4,7 +4,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 
 from .dmx.mixer import Mixer
+from .colorfx import ColorEffect
 from .effects import Effect
+from .posfx import PositionEffect
 from .preset import Preset
 
 CURVES = {
@@ -34,6 +36,9 @@ class LiveCue:
     # Modificatori (vivi): speed moltiplica la velocità di effetti e sequenze; dimmer scala l'intensità
     speed: float = 1.0
     dimmer: float = 1.0
+    # Effetti evoluti: figure di posizione e colori (durata in secondi, scalata dal BPM di riferimento 120)
+    position_fx: PositionEffect | None = None
+    color_fx: ColorEffect | None = None
 
 
 PAGE_PRIORITY_STEP = 100   # priorità effettiva = pagina * 100 + priorità del cue (0-99)
@@ -181,6 +186,22 @@ class LivePlayer:
             for eff in cue.effects:
                 for fx_name, v in eff.evaluate(cue.fixtures, st["bp"]).items():
                     values.append((fx_name, eff.channel, v))
+            if cue.position_fx or cue.color_fx:
+                t = st["bp"] * 0.5      # secondi equivalenti a 120 BPM; il BPM reale accelera via beat clock
+                if cue.position_fx:
+                    for fx_name, (x, y) in cue.position_fx.evaluate(cue.fixtures, t).items():
+                        prof = patch.find(fx_name).profile
+                        for kind, v in (("pan", x), ("tilt", y)):
+                            c = prof.channel_of_kind(kind)
+                            if c:
+                                values.append((fx_name, c.name, round((0.5 + v / 2) * (65535 if c.fine else 255))))
+                if cue.color_fx:
+                    for fx_name, rgb in cue.color_fx.evaluate(cue.fixtures, t).items():
+                        prof = patch.find(fx_name).profile
+                        for kind, v in zip(("red", "green", "blue"), rgb):
+                            c = prof.channel_of_kind(kind)
+                            if c:
+                                values.append((fx_name, c.name, v))
             for fx_name, ch, v in values:
                 fx = patch.find(fx_name)
                 cdef = next((c for c in fx.profile.channels if c.name == ch), None)

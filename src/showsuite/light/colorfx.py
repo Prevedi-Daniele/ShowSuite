@@ -4,7 +4,12 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-from .properties import hsb_to_rgb
+import colorsys
+
+
+def hsb_to_rgb(h: float, s: float, b: float) -> tuple[int, int, int]:
+    r, g, bl = colorsys.hsv_to_rgb((h % 360) / 360.0, max(0, min(1, s)), max(0, min(1, b)))
+    return round(r * 255), round(g * 255), round(bl * 255)
 
 
 def _lerp(a, b, k):
