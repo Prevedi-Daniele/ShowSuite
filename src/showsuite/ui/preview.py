@@ -33,6 +33,7 @@ class PreviewWidget(QWidget):
         self.edit_mode = False
         self.tool: str | None = None          # "truss" | "line" | "text" in modifica
         self.sel_shape: StageShape | None = None
+        self.zoom, self.pan, self._panning = 1.0, QPointF(0, 0), None
         self._shape_new: StageShape | None = None
         self._handle: int | None = None
         self._bg_cache: tuple[bytes, QPixmap] | None = None
@@ -109,10 +110,18 @@ class PreviewWidget(QWidget):
                 f.setPointSize(10); f.setBold(False); p.setFont(f)
                 continue
             pts = [QPointF(x * W, y * H) for x, y in sh.points()]
-            if sh.kind == "line":
+            if sh.kind in ("line", "rect", "ellipse"):
                 p.setPen(QPen(col, 3))
                 for u, v in zip(pts, pts[1:]):
                     p.drawLine(u, v)
+            elif sh.kind == "ledstrip":
+                p.setPen(QPen(QColor(col.red(), col.green(), col.blue(), 90), 6, Qt.SolidLine, Qt.RoundCap))
+                for u, v in zip(pts, pts[1:]):
+                    p.drawLine(u, v)
+                p.setPen(QPen(col, 1)); p.setBrush(col)
+                for q in pts[::4]:
+                    p.drawEllipse(q, 2, 2)
+                p.setBrush(Qt.NoBrush)
             else:   # traliccio: due correnti paralleli con diagonali
                 offs = []
                 for i, q in enumerate(pts):
@@ -170,6 +179,7 @@ class PreviewWidget(QWidget):
         for gx in range(0, self.width(), 40):
             for gy in range(0, self.height(), 40):
                 p.drawPoint(gx, gy)
+        p.translate(self.pan); p.scale(self.zoom, self.zoom)
         self._paint_background(p)
         self._paint_shapes(p)
         fixtures = self.engine.project.patch.fixtures
@@ -212,9 +222,32 @@ class PreviewWidget(QWidget):
             p.drawText(12, self.height() - 12, f"Selezione: {self._typed}")
 
     # --- mouse ---
+    def _map(self, pos: QPointF) -> QPointF:
+        """Posizione del mouse -> coordinate del Preview prima dello zoom."""
+        return (pos - self.pan) / self.zoom
+
+    def wheelEvent(self, e):
+        if e.modifiers() & Qt.ControlModifier:
+            self.zoom_at(e.position(), 1.15 if e.angleDelta().y() > 0 else 1 / 1.15)
+            e.accept()
+        else:
+            super().wheelEvent(e)
+
+    def zoom_at(self, pos: QPointF, factor: float) -> None:
+        z = max(0.25, min(8.0, self.zoom * factor)); k = z / self.zoom
+        self.pan = pos - (pos - self.pan) * k; self.zoom = z
+        if abs(z - 1) < 1e-9:
+            self.pan = QPointF(0, 0)
+        self.update()
+
+    def reset_zoom(self) -> None:
+        self.zoom = 1.0; self.pan = QPointF(0, 0); self.update()
+
     def mousePressEvent(self, e):
         self.setFocus()
-        pos = e.position()
+        if e.button() == Qt.MiddleButton:
+            self._panning = e.position(); return
+        pos = self._map(e.position())
         name = self._hit(pos)
         ctrl = bool(e.modifiers() & (Qt.ControlModifier | Qt.ShiftModifier))
         if e.button() == Qt.RightButton:
@@ -259,9 +292,11 @@ class PreviewWidget(QWidget):
         self.update()
 
     def mouseMoveEvent(self, e):
+        if getattr(self, "_panning", None) is not None:
+            self.pan += e.position() - self._panning; self._panning = e.position(); self.update(); return
         if self._drag_from is None:
             return
-        pos = e.position()
+        pos = self._map(e.position())
         if self._shape_new is not None:
             self._shape_new.x2, self._shape_new.y2 = pos.x() / self.width(), pos.y() / self.height()
         elif getattr(self, "_handle", None) is not None and self.sel_shape:
@@ -290,6 +325,7 @@ class PreviewWidget(QWidget):
         self.update()
 
     def mouseReleaseEvent(self, _):
+        self._panning = None
         if self._shape_new is not None:
             sh = self._shape_new; self._shape_new = None
             if abs(sh.x2 - sh.x1) + abs(sh.y2 - sh.y1) > 0.01:

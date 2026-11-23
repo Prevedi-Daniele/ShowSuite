@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 @dataclass
 class StageShape:
-    kind: str                 # "truss" | "line" | "text"
+    kind: str                 # "truss" | "line" | "text" | "rect" | "ellipse" | "ledstrip"
     x1: float
     y1: float
     x2: float = 0.0
@@ -24,12 +24,29 @@ class StageShape:
         """Polilinea lungo la forma (Bézier quadratica se curva)."""
         if self.kind == "text":
             return [(self.x1, self.y1), (self.x2, self.y2)]
+        if self.kind in ("rect", "ellipse"):
+            return self._outline()
         cx, cy = self.control(); out = []
         for i in range(n + 1):
             t = i / n; u = 1 - t
             out.append((u * u * self.x1 + 2 * u * t * cx + t * t * self.x2,
                         u * u * self.y1 + 2 * u * t * cy + t * t * self.y2))
         return out
+
+    def _outline(self, n: int = 24) -> list[tuple[float, float]]:
+        """Contorno chiuso: ellisse inscritta, o rettangolo con angoli arrotondati (bulge = raggio 0-1)."""
+        import math
+        x0, y0, x1, y1 = self.bounds(); cx, cy = (x0 + x1) / 2, (y0 + y1) / 2; a, b = (x1 - x0) / 2, (y1 - y0) / 2
+        if self.kind == "ellipse":
+            return [(cx + a * math.cos(2 * math.pi * i / 48), cy + b * math.sin(2 * math.pi * i / 48)) for i in range(49)]
+        r = max(0.0, min(1.0, abs(self.bulge))) * min(a, b)
+        if r <= 1e-9:
+            return [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]
+        pts = []
+        for (ox, oy, a0) in ((x1 - r, y0 + r, -90), (x1 - r, y1 - r, 0), (x0 + r, y1 - r, 90), (x0 + r, y0 + r, 180)):
+            for k in range(7):
+                t = math.radians(a0 + 90 * k / 6); pts.append((ox + r * math.cos(t), oy + r * math.sin(t)))
+        pts.append(pts[0]); return pts
 
     def bounds(self) -> tuple[float, float, float, float]:
         return (min(self.x1, self.x2), min(self.y1, self.y2), max(self.x1, self.x2), max(self.y1, self.y2))

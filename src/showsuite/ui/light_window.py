@@ -631,8 +631,12 @@ class MainWindow(QMainWindow):
         pv = self.menuBar().addMenu("Preview")
         self.act_edit_preview = QAction("Modalità modifica", self, checkable=True)
         self.act_edit_preview.toggled.connect(self.set_preview_edit); pv.addAction(self.act_edit_preview)
-        for lab, tool in (("Aggiungi traliccio", "truss"), ("Aggiungi linea", "line"), ("Aggiungi testo", "text")):
+        for lab, tool in (("Aggiungi traliccio", "truss"), ("Aggiungi linea", "line"), ("Aggiungi rettangolo", "rect"),
+                          ("Aggiungi ellisse", "ellipse"), ("Aggiungi striscia LED", "ledstrip"), ("Aggiungi testo", "text")):
             act(pv, lab + "…", lambda t=tool: self.pick_tool(t))
+        act(pv, "Zoom +", lambda: self.preview.zoom_at(QPointF(self.preview.width() / 2, self.preview.height() / 2), 1.25), "Ctrl+=")
+        act(pv, "Zoom −", lambda: self.preview.zoom_at(QPointF(self.preview.width() / 2, self.preview.height() / 2), 0.8), "Ctrl+-")
+        act(pv, "Zoom 100%", self.preview.reset_zoom, "Ctrl+0")
         act(pv, "Immagine di sfondo…", self.load_background); act(pv, "Rimuovi sfondo", self.clear_background)
         o = self.menuBar().addMenu("Uscite"); act(o, "Configura uscite…", self.outputs)
         c = self.menuBar().addMenu("Controllo"); act(c, "MIDI / OSC…", self.control)

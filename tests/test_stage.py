@@ -149,3 +149,29 @@ def test_duplicate_and_reorder_shapes():
     reorder_shape(s, a, "front"); assert s[-1] is a
     reorder_shape(s, a, "back"); assert s[0] is a
     reorder_shape(s, a, "up"); assert s[1] is a
+
+
+def test_rect_ellipse_ledstrip_shapes(tmp_path):
+    r = StageShape("rect", 0.2, 0.2, 0.6, 0.5); e = StageShape("ellipse", 0.2, 0.2, 0.6, 0.5)
+    assert r.distance(0.4, 0.2) < 1e-9 and r.distance(0.4, 0.35) == pytest.approx(0.15)
+    assert e.distance(0.6, 0.35) < 1e-6 and e.distance(0.4, 0.2) < 1e-3
+    rr = StageShape("rect", 0.2, 0.2, 0.6, 0.5, bulge=1.0)
+    assert rr.distance(0.2, 0.2) > 0.03           # angolo arrotondato: l'angolo vivo non è sul contorno
+    p = pj.Project("S"); p.shapes = [r, e, StageShape("ledstrip", 0.1, 0.1, 0.9, 0.1)]
+    f = tmp_path / "s.showsuite-light"; pj.save(p, str(f)); assert [s.kind for s in pj.load(str(f)).shapes] == ["rect", "ellipse", "ledstrip"]
+
+
+def test_preview_zoom_keeps_hit_testing():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtCore import QPointF
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from showsuite.light.engine import LightEngine
+    from showsuite.ui.preview import PreviewWidget
+    p = pj.Project("Z"); p.patch.add(FixtureInstance("A", generic_rgb(), 1, 1, 0.5, 0.5))
+    w = PreviewWidget(LightEngine(p)); w.resize(400, 300)
+    c = QPointF(200, 150); assert w._hit(w._map(c)) == "A"
+    w.zoom_at(QPointF(10, 10), 2.0)
+    screen = w.pan + QPointF(200, 150) * w.zoom          # dove il fixture appare ora
+    assert w._hit(w._map(screen)) == "A" and w.zoom == 2.0
+    w.reset_zoom(); assert w.zoom == 1.0 and w.pan == QPointF(0, 0)
