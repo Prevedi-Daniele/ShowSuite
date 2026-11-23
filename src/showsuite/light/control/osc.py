@@ -116,6 +116,8 @@ class OscServer:
         self.log = None     # ControlLog opzionale
         self._sock: socket.socket | None = None
         self._thread: threading.Thread | None = None
+        self.on_client = None   # callback(host, port) per il feedback
+        self.feedback_port = 0  # 0 = rispondi alla porta mittente
 
     def start(self) -> None:
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -135,6 +137,8 @@ class OscServer:
                 continue
             except OSError:
                 return
+            if self.on_client:
+                self.on_client(src[0], self.feedback_port or src[1])
             try:
                 for addr, args in parse_osc(data):
                     msg = addr + (" " + " ".join(str(a) for a in args) if args else "")

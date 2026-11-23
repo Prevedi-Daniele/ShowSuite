@@ -259,8 +259,11 @@ class ControlDialog(QDialog):
         mrow = QHBoxLayout()
         self.ports = QComboBox(); self.ports.addItems(MidiController.list_ports())
         self.m_btn = QPushButton("Apri MIDI"); self.m_btn.clicked.connect(self._open_midi)
+        self.out_ports = QComboBox(); self.out_ports.addItems(["(nessuna uscita MIDI)"] + MidiController.list_output_ports())
+        self.out_ports.currentIndexChanged.connect(self._open_midi_out)
         mrow.addWidget(QLabel("MIDI")); mrow.addWidget(self.ports, 1); mrow.addWidget(self.m_btn)
         v.addLayout(mrow)
+        v.addWidget(self.out_ports)
         if not self.ports.count():
             v.addWidget(QLabel("Nessuna porta MIDI (serve: pip install showsuite[midi] e il controller collegato)."))
         self.clock_chk = QCheckBox("Sincronizza il BPM con il MIDI clock esterno")
@@ -310,6 +313,14 @@ class ControlDialog(QDialog):
             self.arg2.addItems([c.name for c in self.win.engine.project.patch.find(name).profile.channels])
         except KeyError:
             pass
+
+    def _open_midi_out(self, i: int):
+        try:
+            self.win.midi.close_output()
+            if i > 0:
+                self.win.midi.open_output(self.out_ports.currentText())
+        except Exception as e:
+            QMessageBox.warning(self, "MIDI out", str(e))
 
     def _toggle_osc(self):
         w = self.win
@@ -795,9 +806,23 @@ class MainWindow(QMainWindow):
         self._tint_n = getattr(self, '_tint_n', 0) + 1
         if self._tint_n % 5 == 0:
             self._update_tint(); self.bar.refresh_status(self)
+        if self._tint_n % 3 == 0:
+            self._feedback()
         self.preview.update()
         errs = self.engine.output_errors()
         self.statusBar().showMessage(errs[-1] if errs else "")
+
+    def _feedback(self) -> None:
+        from ..light.control.feedback import MidiFeedback, OscFeedback
+        if self.osc:
+            if not hasattr(self, "osc_fb"):
+                self.osc_fb = OscFeedback()
+            self.osc.on_client = self.osc_fb.add_target
+            self.osc_fb.poll(self.engine)
+        if getattr(self.midi, "_out", None):
+            if not hasattr(self, "midi_fb"):
+                self.midi_fb = MidiFeedback(self.midi.send)
+            self.midi_fb.poll(self.engine, self.engine.project.midi_mappings)
 
     # --- file ---
     def _load_into_engine(self, proj):

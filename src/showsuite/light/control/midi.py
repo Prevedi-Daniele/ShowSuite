@@ -102,6 +102,32 @@ class MidiController:
         self.endpoint = name
         self._port = mido.open_input(name, callback=self._on_message)
 
+    @staticmethod
+    def list_output_ports() -> list[str]:
+        try:
+            import mido
+            return mido.get_output_names()
+        except Exception:
+            return []
+
+    def open_output(self, name: str) -> None:
+        import mido
+        self.close_output(); self._out = mido.open_output(name)
+
+    def close_output(self) -> None:
+        out = getattr(self, "_out", None)
+        if out:
+            out.close()
+        self._out = None
+
+    def send(self, kind: str, channel: int, number: int, value: int) -> None:
+        out = getattr(self, "_out", None)
+        if out is None:
+            return
+        import mido
+        out.send(mido.Message("control_change", channel=channel, control=number, value=value) if kind == "cc"
+                 else mido.Message("note_on", channel=channel, note=number, velocity=value))
+
     def close(self) -> None:
         if self._port:
             self._port.close()
