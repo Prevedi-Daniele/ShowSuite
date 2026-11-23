@@ -57,6 +57,9 @@ class LightEngine:
             self.programmer.release(fx.universe, ch)
         self.values.pop(fixture, None)
         self.project.patch.remove(fixture)
+        for g in self.project.groups:
+            g.fixtures = [n for n in g.fixtures if n != fixture]
+        self.project.groups = [g for g in self.project.groups if g.fixtures]
 
     def fixture_color(self, fx: FixtureInstance) -> tuple[int, int, int]:
         """Colore indicativo per il Preview, dall'uscita reale (programmer + cue)."""

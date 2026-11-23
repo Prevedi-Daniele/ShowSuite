@@ -49,3 +49,35 @@ def test_preview_draw_truss_and_delete():
     assert w.sel_shape is e.project.shapes[0]
     QTest.keyClick(w, Qt.Key_Delete); assert e.project.shapes == []
     w.grab()
+
+
+def test_groups_select_by_type_save_and_prune(tmp_path):
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.fixtures import generic_dimmer
+    from showsuite.light.stage import make_group, select_by_profile
+    e = LightEngine()
+    for i in range(3):
+        e.project.patch.add(FixtureInstance(f"P{i + 1}", generic_rgb(), 1, 1 + i * 3))
+    e.project.patch.add(FixtureInstance("D1", generic_dimmer(), 1, 20))
+    assert select_by_profile(e.project.patch, "P2") == ["P1", "P2", "P3"]
+    g = make_group(e.project.groups, "Fronte", ["P2", "P1", "P2"]); assert g.fixtures == ["P2", "P1"]
+    make_group(e.project.groups, "Fronte", ["P3"]); assert len(e.project.groups) == 1 and e.project.groups[0].fixtures == ["P3"]
+    import pytest as _p
+    with _p.raises(ValueError):
+        make_group(e.project.groups, " ", ["P1"])
+    f = tmp_path / "g.showsuite-light"; pj.save(e.project, str(f)); assert pj.load(str(f)).groups[0].name == "Fronte"
+    e.remove_fixture("P3"); assert e.project.groups == []
+
+
+def test_group_ui_flow():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    from showsuite.ui.light_window import AddFixtureDialog, MainWindow
+    app = QApplication.instance() or QApplication([])
+    w = MainWindow(); d = AddFixtureDialog(w.engine, w); d.prof.setCurrentIndex(1); d.count.setValue(3); d.create()
+    w._refresh_list(); w.preview.set_selection(["Fixture 1", "Fixture 3"])
+    from showsuite.light.stage import make_group
+    make_group(w.engine.project.groups, "Lati", w.preview.selection); w._refresh_groups()
+    assert w.grouplist.count() == 1
+    w.preview.set_selection([]); w.preview.select_group("Lati")
+    assert w.preview.selection == ["Fixture 1", "Fixture 3"]

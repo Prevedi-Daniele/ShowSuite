@@ -5,7 +5,7 @@ import sys
 
 from PySide6.QtCore import QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QBrush, QColor, QPainter, QPen
-from PySide6.QtWidgets import (QTreeWidget, QTreeWidgetItem, QStackedWidget, QToolBar, QAbstractItemView, QApplication, QComboBox, QDialog, QDialogButtonBox,
+from PySide6.QtWidgets import (QMenu, QTreeWidget, QTreeWidgetItem, QStackedWidget, QToolBar, QAbstractItemView, QApplication, QComboBox, QDialog, QDialogButtonBox,
                                QCheckBox, QDockWidget, QDoubleSpinBox, QFileDialog, QFormLayout, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QMainWindow, QMessageBox, QPushButton, QScrollArea, QSlider,
                                QSpinBox, QSplitter, QVBoxLayout, QWidget)
@@ -489,7 +489,13 @@ class MainWindow(QMainWindow):
         self.preview.selection_changed.connect(self._on_preview_selection)
         self.fixlist.itemSelectionChanged.connect(self._on_list_selection)
         # layout: patch | preview ; sotto Design/Live
+        self.grouplist = QListWidget(); self.grouplist.setMaximumHeight(130)
+        self.grouplist.itemClicked.connect(lambda it: self.preview.select_group(it.text()))
+        self.grouplist.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.grouplist.customContextMenuRequested.connect(self._group_menu)
+        self.preview.groups_changed.connect(self._refresh_groups)
         left = QWidget(); lv = QVBoxLayout(left); lv.addWidget(QLabel("Patch")); lv.addWidget(self.fixlist)
+        lv.addWidget(QLabel("Gruppi")); lv.addWidget(self.grouplist)
         scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setWidget(self.faders)
         scroll.setMinimumWidth(320)
         self.design = DesignView(self.engine, scroll)
@@ -618,7 +624,21 @@ class MainWindow(QMainWindow):
     def _retitle(self):
         self.setWindowTitle(f"ShowSuite Light — {self.engine.project.name}")
 
+    def _refresh_groups(self):
+        self.grouplist.clear()
+        self.grouplist.addItems([g.name for g in self.engine.project.groups])
+
+    def _group_menu(self, pos):
+        it = self.grouplist.itemAt(pos)
+        if not it:
+            return
+        m = QMenu(self)
+        m.addAction("Elimina gruppo", lambda: (setattr(self.engine.project, "groups",
+                    [g for g in self.engine.project.groups if g.name != it.text()]), self._refresh_groups()))
+        m.exec(self.grouplist.mapToGlobal(pos))
+
     def _refresh_list(self):
+        self._refresh_groups()
         self.fixlist.blockSignals(True)
         self.fixlist.clear()
         for f in self.engine.project.patch.fixtures:

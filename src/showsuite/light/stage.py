@@ -64,3 +64,29 @@ def distribute(fixtures, axis: str) -> None:
     a, b = key(fs[0]), key(fs[-1])
     for i, f in enumerate(fs):
         setattr(f, attr, a + (b - a) * i / (len(fs) - 1))
+
+
+@dataclass
+class FixtureGroup:
+    name: str
+    fixtures: list[str]
+
+
+def make_group(groups: list[FixtureGroup], name: str, fixtures: list[str]) -> FixtureGroup:
+    """Crea o sostituisce il gruppo `name` (l'ordine dei fixture è quello di selezione)."""
+    name = name.strip()
+    if not name:
+        raise ValueError("nome gruppo vuoto")
+    if not fixtures:
+        raise ValueError("selezione vuota")
+    groups[:] = [g for g in groups if g.name != name]
+    g = FixtureGroup(name, list(dict.fromkeys(fixtures)))
+    groups.append(g)
+    return g
+
+
+def select_by_profile(patch, fixture_name: str) -> list[str]:
+    """Tutti i fixture dello stesso tipo (costruttore, modello e modalità) del fixture dato."""
+    ref = patch.find(fixture_name).profile
+    key = (ref.manufacturer, ref.model, ref.mode)
+    return [f.name for f in patch.fixtures if (f.profile.manufacturer, f.profile.model, f.profile.mode) == key]

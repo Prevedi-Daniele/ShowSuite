@@ -8,7 +8,7 @@ from PySide6.QtGui import QPixmap, QBrush, QColor, QLinearGradient, QPainter, QP
 from PySide6.QtWidgets import QInputDialog, QMenu, QWidget
 
 from ..light.engine import LightEngine
-from ..light.stage import ALIGN_MODES, StageShape, align, distribute
+from ..light.stage import ALIGN_MODES, StageShape, align, distribute, make_group, select_by_profile
 from .theme import ACCENT
 
 BEAM_LEN = 130.0
@@ -301,12 +301,27 @@ class PreviewWidget(QWidget):
             m.addAction("Distribuisci orizzontalmente", lambda: (distribute(fxs, "h"), self.update()))
             m.addAction("Distribuisci verticalmente", lambda: (distribute(fxs, "v"), self.update()))
             m.addSeparator()
+        m.addAction("Crea gruppo dalla selezione…", self.create_group_dialog)
+        m.addAction("Seleziona stesso tipo", lambda: self.set_selection(select_by_profile(self.engine.project.patch, fxs[0].name)))
+        m.addSeparator()
         m.addAction("Ruota +15°", lambda: self._rotate(fxs, 15))
         m.addAction("Ruota −15°", lambda: self._rotate(fxs, -15))
         m.addAction("Angolo del raggio…", lambda: self._ask_angle(fxs))
         hide = all(f.hide_beam for f in fxs)
         m.addAction("Mostra raggio" if hide else "Nascondi raggio", lambda: self._set_hide(fxs, not hide))
         m.exec(global_pos)
+
+    groups_changed = Signal()
+
+    def create_group_dialog(self):
+        t, ok = QInputDialog.getText(self, "Nuovo gruppo", "Nome del gruppo:")
+        if ok and t.strip() and self.selection:
+            make_group(self.engine.project.groups, t, self.selection); self.groups_changed.emit()
+
+    def select_group(self, name: str):
+        g = next((g for g in self.engine.project.groups if g.name == name), None)
+        if g:
+            self.set_selection(list(g.fixtures))
 
     def _rotate(self, fxs, delta):
         for f in fxs:
