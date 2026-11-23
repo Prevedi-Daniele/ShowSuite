@@ -116,15 +116,50 @@ class LightEngine:
     def render_output(self, universe: int) -> bytes:
         return self.mixer.render(universe, skip={self.programmer} if self.blind else ())
 
+    def _apply_fixture_options(self, universe: int, buf: bytearray, gm: float) -> None:
+        """Opzioni dei fixture sull'uscita: disabilitati a zero, offset pan/tilt, limiti dimmer, Grand Master."""
+        for fx in self.project.patch.fixtures:
+            if fx.universe != universe:
+                continue
+            prof = fx.profile
+            a0 = fx.address - 1
+            if fx.disabled:
+                buf[a0:a0 + prof.footprint] = bytes(prof.footprint)
+                continue
+            for kind, off, rng in (("pan", fx.pan_offset, fx.pan_range), ("tilt", fx.tilt_offset, fx.tilt_range)):
+                c = prof.channel_of_kind(kind)
+                if c and off and rng:
+                    i = a0 + prof.offset_of(c.name)
+                    cur = (buf[i] << 8 | buf[i + 1]) if c.fine else buf[i] * 257
+                    new = max(0, min(65535, round(cur + off / rng * 65535)))
+                    if c.fine:
+                        buf[i], buf[i + 1] = new >> 8, new & 0xFF
+                    else:
+                        buf[i] = round(new / 257)
+            c = prof.channel_of_kind("intensity")
+            kinds = [c] if c else [k for k in (prof.channel_of_kind(x) for x in ("red", "green", "blue", "white", "amber", "uv")) if k]
+            lim = fx.dimmer_min != 0 or fx.dimmer_max != 255
+            for k in kinds:
+                i = a0 + prof.offset_of(k.name)
+                v = buf[i]
+                if lim and c:      # i limiti valgono solo per il canale dimmer vero e proprio
+                    v = round(fx.dimmer_min + v / 255 * (fx.dimmer_max - fx.dimmer_min))
+                if gm < 1.0 and not fx.ignore_master:
+                    v = round(v * gm)
+                buf[i] = v
+
+    def _has_fixture_options(self) -> bool:
+        return any(f.disabled or f.pan_offset or f.tilt_offset or f.dimmer_min != 0 or f.dimmer_max != 255 or f.ignore_master
+                   for f in self.project.patch.fixtures)
+
     def process(self, universe: int, data: bytes) -> bytes:
-        """Ultimo stadio prima delle uscite: freeze, grand master, blackout."""
+        """Ultimo stadio prima delle uscite: freeze, opzioni fixture, grand master, blackout."""
         if self.freeze and universe in self._frozen:
             return self._frozen[universe]
         gm = 0.0 if self.blackout else self.grand_master
-        if gm < 1.0:
+        if gm < 1.0 or self._has_fixture_options():
             buf = bytearray(data)
-            for ch in self._intensity_channels().get(universe, ()):
-                buf[ch - 1] = round(buf[ch - 1] * gm)
+            self._apply_fixture_options(universe, buf, gm)
             data = bytes(buf)
         if self.freeze:
             self._frozen[universe] = data

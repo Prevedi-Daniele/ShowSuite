@@ -107,3 +107,22 @@ def test_curved_shape_and_handles():
     QTest.mouseMove(w, QPointF(50, 300).toPoint()); QTest.mouseRelease(w, Qt.LeftButton, pos=QPointF(50, 300).toPoint())
     assert arc.x1 == pytest.approx(0.05) and arc.y1 == pytest.approx(0.6)
     w.grab()
+
+
+def test_fixture_options_engine_and_save(tmp_path):
+    from showsuite.light.engine import LightEngine
+    p = pj.Project("O")
+    d = FixtureInstance("D", generic_rgb(), 1, 1, dimmer_min=0)
+    e = LightEngine(p) if False else None
+    from showsuite.light.fixtures import generic_dimmer
+    a = FixtureInstance("A", generic_dimmer(), 1, 1, dimmer_min=10, dimmer_max=200)
+    b = FixtureInstance("B", generic_dimmer(), 1, 2, ignore_master=True)
+    c = FixtureInstance("C", generic_dimmer(), 1, 3, disabled=True)
+    for f in (a, b, c):
+        p.patch.add(f)
+    eng = LightEngine(p); eng.grand_master = 0.5
+    out = eng.process(1, bytes([255, 255, 255]) + bytes(509))
+    assert out[0] == round((10 + 190) * 0.5) and out[1] == 255 and out[2] == 0
+    f = tmp_path / "o.showsuite-light"; pj.save(p, str(f)); q = pj.load(str(f))
+    fa = next(x for x in q.patch.fixtures if x.name == "A")
+    assert (fa.dimmer_min, fa.dimmer_max) == (10, 200) and next(x for x in q.patch.fixtures if x.name == "C").disabled

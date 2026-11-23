@@ -69,6 +69,15 @@ class FixtureInstance:
     rotation: float = 0.0     # gradi: 0 = beam verso il basso, positivo = antiorario
     beam_angle: float = 30.0  # apertura del cono (gradi)
     hide_beam: bool = False
+    # Fixture Options (come in Lightkey)
+    dimmer_min: int = 0            # valore DMX inviato con il dimmer a Off (solo uscita)
+    dimmer_max: int = 255          # valore DMX inviato con il dimmer a Full (solo uscita)
+    ignore_master: bool = False    # il Grand Master non si applica
+    pan_range: float = 540.0       # gradi (come da profilo, se il fixture ha più modalità)
+    tilt_range: float = 270.0
+    pan_offset: float = 0.0        # gradi aggiunti a tutti i pan inviati
+    tilt_offset: float = 0.0
+    disabled: bool = False         # non controllato: tutti i canali a zero, non selezionabile
 
     @property
     def end_address(self) -> int:

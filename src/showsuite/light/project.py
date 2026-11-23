@@ -129,7 +129,10 @@ def save(project: Project, path) -> None:
         profiles[pid] = f.profile
         fixtures.append({"name": f.name, "profile": pid, "universe": f.universe,
                          "address": f.address, "x": f.x, "y": f.y, "rotation": f.rotation,
-                         "beam_angle": f.beam_angle, "hide_beam": f.hide_beam})
+                         "beam_angle": f.beam_angle, "hide_beam": f.hide_beam,
+                         "dimmer_min": f.dimmer_min, "dimmer_max": f.dimmer_max, "ignore_master": f.ignore_master,
+                         "pan_range": f.pan_range, "tilt_range": f.tilt_range, "pan_offset": f.pan_offset,
+                         "tilt_offset": f.tilt_offset, "disabled": f.disabled})
     doc = {"schema_version": SCHEMA_VERSION, "name": project.name, "fixtures": fixtures,
            "outputs": [{"type": o.type, "universe": o.universe, "params": o.params}
                        for o in project.outputs],
@@ -179,7 +182,9 @@ def load(path) -> Project:
         proj.patch.add(FixtureInstance(f["name"], profiles[f["profile"]], f["universe"],
                                        f["address"], f.get("x", 0.5), f.get("y", 0.5),
                                        f.get("rotation", 0.0), f.get("beam_angle", 30.0),
-                                       f.get("hide_beam", False)))
+                                       f.get("hide_beam", False), f.get("dimmer_min", 0), f.get("dimmer_max", 255),
+                                       f.get("ignore_master", False), f.get("pan_range", 540.0), f.get("tilt_range", 270.0),
+                                       f.get("pan_offset", 0.0), f.get("tilt_offset", 0.0), f.get("disabled", False)))
     proj.outputs = [OutputConfig(o["type"], o["universe"], o.get("params", {}))
                     for o in doc["outputs"]]
     proj.palettes = [Palette(p["name"], [Preset(x["name"], x["values"]) for x in p["presets"]], p.get("group", ""))

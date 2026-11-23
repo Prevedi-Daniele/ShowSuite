@@ -346,7 +346,13 @@ class PreviewWidget(QWidget):
         m.addAction("Angolo del raggio…", lambda: self._ask_angle(fxs))
         hide = all(f.hide_beam for f in fxs)
         m.addAction("Mostra raggio" if hide else "Nascondi raggio", lambda: self._set_hide(fxs, not hide))
+        m.addSeparator()
+        m.addAction("Opzioni fixture…", lambda: self._options(fxs))
         m.exec(global_pos)
+
+    def _options(self, fxs):
+        from .fixture_options import FixtureOptionsDialog
+        FixtureOptionsDialog(fxs, self).exec(); self.update()
 
     groups_changed = Signal()
 

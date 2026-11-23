@@ -207,8 +207,8 @@ class PatchWindow(QDialog):
                 patch.add(fx); a += prof.footprint
         else:
             old = pop.fixture
-            new = FixtureInstance(pop.name.text(), prof, old.universe, pop.addr_s.value(), old.x, old.y,
-                                  old.rotation, old.beam_angle, old.hide_beam)
+            import dataclasses
+            new = dataclasses.replace(old, name=pop.name.text(), profile=prof, address=pop.addr_s.value())
             patch.remove(old.name)
             try:
                 patch.add(new)
