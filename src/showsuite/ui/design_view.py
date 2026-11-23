@@ -92,11 +92,11 @@ class Panel(QFrame):
             sp.valueChanged.connect(lambda v: self._shut("strobe", v / 100))
             self.body.addWidget(QLabel("Strobe (velocità)")); self.body.addWidget(sp)
         elif p == "position":
-            for label, kw in (("Pan", "pan"), ("Tilt", "tilt")):
-                self.body.addWidget(QLabel(label))
-                s = QSlider(Qt.Horizontal); s.setRange(0, 1000); s.setValue(500)
-                s.valueChanged.connect(lambda v, kw=kw: (P.set_position(self.engine, self.names, **{kw: v / 1000}), self.touched()))
-                self.body.addWidget(s)
+            from .position_pad import PositionPad
+            fx = self.engine.project.patch.find(self.names[0]) if self.names else None
+            self.pad = PositionPad(lambda pan, tilt: (P.set_position(self.engine, self.names, pan, tilt), self.touched()),
+                                   fx.pan_range if fx else 540.0, fx.tilt_range if fx else 270.0)
+            self.body.addWidget(self.pad)
         else:   # zoom, focus, iris, prism, frost
             s = QSlider(Qt.Horizontal); s.setRange(0, 1000)
             s.valueChanged.connect(lambda v: (P.set_simple(self.engine, self.names, p, v / 1000), self.touched()))
@@ -155,6 +155,8 @@ class DesignView(QWidget):
             p.setVisible(k in avail)
             if k in avail:
                 p.fill_slots(profs[k])
+            if k == "position" and k in avail and hasattr(p, "pad"):
+                fx = self.engine.project.patch.find(names[0]); p.pad.set_ranges(fx.pan_range, fx.tilt_range)
         self.refresh_dots()
 
     def refresh_dots(self) -> None:

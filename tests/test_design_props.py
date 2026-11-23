@@ -75,3 +75,15 @@ def test_generic_dimmer_property_for_rgb_and_roundtrip(tmp_path):
     f = tmp_path / "t.showsuite-light"; pj.save(p, str(f)); q = pj.load(str(f))
     assert q.patch.find("S").profile.channel_of_kind("shutter").caps[0][3] == "Closed"
     assert q.patch.find("S").profile.channel_of_kind("gobo_wheel") is not None
+
+
+def test_position_pad_degrees():
+    import os; os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from showsuite.ui.position_pad import PositionPad
+    got = []
+    pad = PositionPad(lambda a, b: got.append((a, b)), 540, 270)
+    pad.spins[0].setValue(135.0); pad.spins[1].setValue(-67.5)
+    assert got[0][0] == 0.75 and got[1][1] == 0.25
+    pad.pad.moved.emit(0.5, 0.5); assert pad.spins[0].value() == 0
