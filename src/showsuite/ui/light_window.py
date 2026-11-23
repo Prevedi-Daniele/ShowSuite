@@ -589,6 +589,8 @@ class MainWindow(QMainWindow):
         ed.addSeparator()
         act(ed, "Copia proprietà", self.copy_props, "Ctrl+Alt+C"); act(ed, "Incolla proprietà", self.paste_props, "Ctrl+Alt+V")
         act(ed, "Ripristina valori predefiniti", self.reset_props)
+        ed.addSeparator()
+        act(ed, "Cerca nel progetto…", self.search_dialog, "Ctrl+F")
         v = self.menuBar().addMenu("Vista")
         act(v, "Design", lambda: self.show_view(0), "Ctrl+D"); act(v, "Live", lambda: self.show_view(1), "Ctrl+L"); act(v, "Effetti", lambda: self.show_view(2), "Ctrl+E")
         p = self.menuBar().addMenu("Patch")
@@ -834,6 +836,13 @@ class MainWindow(QMainWindow):
         self.preview.set_selection([n for n in sel if n in valid])
         self._retitle(); self._refresh_list(); self._refresh_palette(); self.live_view.rebuild(); self.preview.update()
 
+    def search_dialog(self) -> None:
+        from .search_dialog import SearchDialog
+        d = SearchDialog(self.engine.project, self)
+        d.chosen.connect(lambda scope, name: (self.preview.set_selection([name]) if scope == "fixture"
+                                              else self.preview.select_group(name) if scope == "gruppo" else None))
+        d.exec()
+
     def copy_props(self) -> None:
         names = self.selected_names()
         if names:
@@ -922,6 +931,11 @@ def main() -> int:
     app = QApplication(sys.argv)
     theme.apply(app)
     w = MainWindow(); w.resize(1100, 640); w.show()
+    from ..light import recents, settings as S
+    import os
+    last = recents.load()
+    if S.load()["open_last"] and last and os.path.exists(last[0]):
+        w.open_path(last[0])
     return app.exec()
 
 
