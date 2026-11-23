@@ -5,6 +5,7 @@ from dataclasses import dataclass, field, replace
 
 from .dmx.mixer import Mixer
 from .colorfx import ColorEffect
+from .patfx import PatternEffect
 from .effects import Effect
 from .posfx import PositionEffect
 from .preset import Preset
@@ -39,6 +40,7 @@ class LiveCue:
     # Effetti evoluti: figure di posizione e colori (durata in secondi, scalata dal BPM di riferimento 120)
     position_fx: PositionEffect | None = None
     color_fx: ColorEffect | None = None
+    pattern_fx: PatternEffect | None = None
 
 
 PAGE_PRIORITY_STEP = 100   # priorità effettiva = pagina * 100 + priorità del cue (0-99)
@@ -218,6 +220,14 @@ class LivePlayer:
             for eff in cue.effects:
                 for fx_name, v in eff.evaluate(cue.fixtures, st["bp"]).items():
                     values.append((fx_name, eff.channel, v))
+            if cue.pattern_fx:
+                for fx_name, rgb in cue.pattern_fx.evaluate([patch.find(n) for n in cue.fixtures], st['bp'] * 0.5, st['bp']).items():
+                    prof = patch.find(fx_name).profile
+                    chans = [prof.channel_of_kind(k) for k in ('red', 'green', 'blue')]
+                    if all(chans):
+                        values.extend((fx_name, c.name, v) for c, v in zip(chans, rgb))
+                    elif prof.channel_of_kind('intensity'):
+                        values.append((fx_name, prof.channel_of_kind('intensity').name, max(rgb)))
             if cue.position_fx or cue.color_fx:
                 t = st["bp"] * 0.5      # secondi equivalenti a 120 BPM; il BPM reale accelera via beat clock
                 if cue.position_fx:

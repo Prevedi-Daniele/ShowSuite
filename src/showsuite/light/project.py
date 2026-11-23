@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 from .dmx.drivers import ArtNetDriver, OpenDmxDriver, OutputDriver, SacnDriver
 from .colorfx import ColorEffect
+from .patfx import PatternEffect
 from .effects import Effect
 from .posfx import PositionEffect
 from .fixtures import ChannelDef, FixtureInstance, FixtureProfile, Patch
@@ -64,6 +65,8 @@ def _cue_to_dict(c: LiveCue) -> dict:
             "beats_per_step": c.beats_per_step, "crossfade": c.crossfade, "loop": c.loop,
             "speed": c.speed, "dimmer": c.dimmer,
             "position_fx": vars(c.position_fx) if c.position_fx else None,
+            "pattern_fx": ({**vars(c.pattern_fx), "samples": [list(x) for x in c.pattern_fx.samples]}
+                           if c.pattern_fx else None),
             "color_fx": ({**vars(c.color_fx), "swatches": [list(x) for x in c.color_fx.swatches]}
                          if c.color_fx else None)}
 
@@ -78,7 +81,13 @@ def _cue_from_dict(d: dict) -> LiveCue:
                    d.get("beats_per_step", 1.0), d.get("crossfade", 0.0), d.get("loop", True),
                    d.get("speed", 1.0), d.get("dimmer", 1.0),
                    PositionEffect(**d["position_fx"]) if d.get("position_fx") else None,
-                   _color_fx(d["color_fx"]) if d.get("color_fx") else None)
+                   _color_fx(d["color_fx"]) if d.get("color_fx") else None,
+                   _pattern_fx(d["pattern_fx"]) if d.get("pattern_fx") else None)
+
+
+def _pattern_fx(d: dict) -> PatternEffect:
+    d = dict(d); d["samples"] = [tuple(x) for x in d.get("samples", [])]
+    return PatternEffect(**d)
 
 
 def _color_fx(d: dict) -> ColorEffect:
