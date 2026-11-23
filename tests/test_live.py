@@ -255,3 +255,14 @@ def test_fader_and_exclusive_group_and_save(tmp_path):
     f = tmp_path / "x.showsuite-light"; pj.save(e.project, str(f)); q = pj.load(str(f))
     pg = q.pages[0]
     assert pg.frames == ["Colori", "Dimmer"] and pg.buttons[1].kind == "fader" and pg.buttons[0].group == "f0"
+
+
+def test_duplicate_button_and_text(tmp_path):
+    from showsuite.light import project as pj
+    from showsuite.light.live import LiveButton, LiveCue, LivePage, duplicate_button
+    p = pj.Project("D"); p.cues = [LiveCue("A", ["x"])]
+    pg = LivePage("P", [LiveButton("A"), LiveButton("", label="Titolo", kind="text")]); p.pages = [pg]
+    n = duplicate_button(p, pg, pg.buttons[0]); n2 = duplicate_button(p, pg, pg.buttons[0])
+    assert n.cue == "A copia" and n2.cue == "A copia 2" and len(p.cues) == 3
+    f = tmp_path / "d.showsuite-light"; pj.save(p, str(f)); q = pj.load(str(f))
+    assert [b.kind for b in q.pages[0].buttons].count("text") == 1

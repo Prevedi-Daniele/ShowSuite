@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QColorDialog, QFrame, QGridLayout, QHBoxLayout, Q
                                QPushButton, QSlider, QVBoxLayout, QWidget)
 
 from ..light.engine import LightEngine
-from ..light.live import CueList, LiveButton, LivePage
+from ..light.live import CueList, LiveButton, LivePage, duplicate_button
 from .cuelist_view import CueListView
 from .button_popover import ButtonPopover
 
@@ -186,7 +186,7 @@ class LiveView(QWidget):
         from ..light.live import CueListStep
         p = self.page
         if p and not p.cuelist:
-            p.cuelist = CueList(p.name, [CueListStep(b.cue) for b in p.buttons])
+            p.cuelist = CueList(p.name, [CueListStep(b.cue) for b in p.buttons if b.kind != "text"])
             self._fill_grid()
 
     def remove_cuelist(self) -> None:
@@ -245,6 +245,12 @@ class LiveView(QWidget):
                 t.customContextMenuRequested.connect(lambda pos, fi=fi: self._frame_menu(fi))
                 v.addWidget(t)
             grid = QGridLayout(); grid.setSpacing(3); grid.setAlignment(Qt.AlignTop); v.addLayout(grid)
+            for b in members:
+                if b.kind == "text":
+                    t = QLabel(b.label or "Testo"); t.setStyleSheet(f"color:{b.color};font-size:15px;font-weight:600;padding:2px 4px;")
+                    t.setContextMenuPolicy(Qt.CustomContextMenu)
+                    t.customContextMenuRequested.connect(lambda pos, b=b, t=t: self._text_menu(b, t))
+                    v.addWidget(t)
             btns = [b for b in members if b.kind == "button"]; fads = [b for b in members if b.kind == "fader"]
             cols = 2 if len(btns) > 1 else 1
             for i, b in enumerate(btns):
@@ -255,8 +261,20 @@ class LiveView(QWidget):
                 self.widgets.append(w)
             self.frames_box.addWidget(box); self.frame_widgets.append(box)
 
+    def _text_menu(self, b, w) -> None:
+        m = QMenu(w)
+        m.addAction("Modifica testo…", lambda: self._pick_label(b)); m.addAction("Colore…", lambda: self._pick_color(b))
+        m.addAction("Rimuovi", lambda: (self.page.buttons.remove(b), self._fill_grid()))
+        m.exec(self.cursor().pos())
+
+    def add_text(self, fi: int) -> None:
+        t, ok = QInputDialog.getText(self, "Testo", "Testo:")
+        if ok and t and self.page:
+            self.page.buttons.append(LiveButton("", label=t, color="#e8eaf0", frame=fi, kind="text")); self._fill_grid()
+
     def _frame_menu(self, fi: int) -> None:
         m = QMenu(self)
+        m.addAction("Aggiungi testo…", lambda: self.add_text(fi))
         m.addAction("Titolo…", lambda: self._frame_title(fi))
         m.addAction("Nuova cornice", self.add_frame)
         m.exec(self.cursor().pos())
@@ -286,6 +304,7 @@ class LiveView(QWidget):
         for i in range(len(p.frames)):
             sub.addAction(f"{i + 1}" + (f" — {p.frames[i]}" if p.frames[i] else ""),
                           lambda i=i: (setattr(b, "frame", i), self._fill_grid()))
+        m.addAction("Duplica", lambda: (duplicate_button(self.engine.project, p, b), self._fill_grid()))
         m.addAction("Colore…", lambda: self._pick_color(b))
         m.addAction("Etichetta…", lambda: self._pick_label(b))
         m.addAction("Rimuovi dalla pagina", lambda: (p.buttons.remove(b), self._fill_grid()))

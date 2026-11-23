@@ -26,5 +26,5 @@ def search(project, query: str, scopes=SCOPES) -> list[tuple[str, str, str]]:
         for pg in project.pages:
             if hit(pg.name):
                 out.append(("pagina", pg.name, ""))
-            out += [("pagina", b.name, pg.name) for b in pg.buttons if hit(b.name)]
+            out += [("pagina", b.label or b.cue, pg.name) for b in pg.buttons if hit(b.label, b.cue)]
     return out

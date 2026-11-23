@@ -70,8 +70,25 @@ class LiveButton:
     color: str = "#3a7bd5"
     label: str = ""
     frame: int = 0              # indice della cornice nella pagina
-    kind: str = "button"        # "button" | "fader" (fader verticale = livello del cue)
+    kind: str = "button"        # "button" | "fader" (fader verticale) | "text" (etichetta, nessun cue)
     group: str = ""             # stesso gruppo = pulsanti "attached": uno solo attivo, con crossfade
+
+
+def duplicate_button(project, page, btn):
+    """Duplica pulsante e relativo cue (nome 'X copia', 'X copia 2'…); ritorna il nuovo LiveButton."""
+    import copy
+    new = copy.deepcopy(btn)
+    if btn.kind != "text":
+        src = next((c for c in project.cues if c.name == btn.cue), None)
+        if src:
+            names = {c.name for c in project.cues}
+            n, name = 1, f"{src.name} copia"
+            while name in names:
+                n += 1; name = f"{src.name} copia {n}"
+            c2 = copy.deepcopy(src); c2.name = name; project.cues.append(c2); new.cue = name
+            new.group = ""
+    page.buttons.insert(page.buttons.index(btn) + 1, new)
+    return new
 
 
 @dataclass
