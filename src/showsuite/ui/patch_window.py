@@ -122,6 +122,11 @@ class PatchWindow(QDialog):
         self.search = QLineEdit(); self.search.setPlaceholderText("Search Fixture Library")
         self.makers = QListWidget(); self.models = QListWidget()
         left = QWidget(); lv = QVBoxLayout(left); lv.addWidget(self.search)
+        brow = QHBoxLayout()
+        for lab, fn in (("Nuovo profilo…", lambda: self.edit_profile(False)), ("Modifica/Duplica…", lambda: self.edit_profile(True)),
+                        ("Elimina", self.delete_profile)):
+            b = QPushButton(lab); b.clicked.connect(lambda _=0, fn=fn: fn()); brow.addWidget(b)
+        lv.addLayout(brow)
         row = QHBoxLayout(); row.addWidget(self.makers); row.addWidget(self.models, 1); lv.addLayout(row)
         self.tabs = QTabBar(); self.tabs.setExpanding(False)
         self.grid = UniverseGrid(engine)
@@ -178,6 +183,23 @@ class PatchWindow(QDialog):
             seen.add((self._maker(p), label))
             it = QListWidgetItem(label if not q else f"{self._maker(p)} {label}"); it.setData(Qt.UserRole, k)
             self.models.addItem(it)
+
+    def edit_profile(self, from_selected: bool):
+        from .profile_editor import ProfileEditor
+        it = self.models.currentItem()
+        base = self.engine.library.get(it.data(Qt.UserRole)) if (from_selected and it) else None
+        ed = ProfileEditor(base, self)
+        if ed.exec() and ed.result_profile:
+            p = ed.result_profile
+            self.engine.library[f"{p.manufacturer} {p.model} — {p.mode} ({p.footprint} ch)".strip()] = p
+            self.reload()
+
+    def delete_profile(self):
+        from ..light import userlib
+        it = self.models.currentItem()
+        p = self.engine.library.get(it.data(Qt.UserRole)) if it else None
+        if p and p in userlib.load_all():
+            userlib.delete_profile(p); self.engine.library.pop(it.data(Qt.UserRole), None); self.reload()
 
     def _universe(self, i):
         self.grid.universe = i + 1; self.grid.update()

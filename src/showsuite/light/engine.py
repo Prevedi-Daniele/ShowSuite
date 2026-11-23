@@ -19,6 +19,12 @@ class LightEngine:
         self.output: OutputManager | None = None
         self.beat = BeatClock(120.0, now)
         self.library: dict = {"Dimmer generico (1 ch)": generic_dimmer(), "RGB generico (3 ch)": generic_rgb()}
+        try:
+            from .userlib import load_all
+            for p in load_all():
+                self.library[f"{p.manufacturer} {p.model} — {p.mode} ({p.footprint} ch)".strip()] = p
+        except Exception:
+            pass
         self._highlight = self.mixer.add_layer(10**7)   # sopra a tutto, solo per riconoscere i fixture
         self.blind = False   # se attivo il programmer non va in uscita (resta nel Preview)
         self.grand_master = 1.0
