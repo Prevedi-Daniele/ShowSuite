@@ -96,5 +96,7 @@ class DmxMonitor(QDialog):
         for r, (u, a, prop, name) in enumerate(self.rows):
             data = cache.setdefault(u, self.engine.process(u, self.engine.render_output(u)) if not self.engine.freeze else self.engine.render_output(u))
             for c, v in enumerate([str(a), prop, name, str(data[a - 1])]):
-                it = self.table.item(r, c) or QTableWidgetItem()
-                it.setText(v); self.table.setItem(r, c, it)
+                it = self.table.item(r, c)
+                if it is None:
+                    it = QTableWidgetItem(); self.table.setItem(r, c, it)
+                it.setText(v)

@@ -608,6 +608,7 @@ class MainWindow(QMainWindow):
         act(m, "Nuovo", self.new, "Ctrl+N"); act(m, "Apri…", self.open, "Ctrl+O")
         act(m, "Salva", self.save, "Ctrl+S"); act(m, "Salva con nome…", self.save_as)
         act(m, "Chiudi progetto", self.new, "Ctrl+W")
+        act(m, "Project Browser…", self.project_browser, "Ctrl+Shift+O")
         act(m, "Impostazioni…", lambda: __import__("showsuite.ui.settings_dialog", fromlist=["x"]).SettingsDialog(self).exec(), "Ctrl+,")
         self.recent_menu = m.addMenu("Apri recente"); self.recent_menu.aboutToShow.connect(self._fill_recent)
         ed = self.menuBar().addMenu("Modifica")
@@ -1001,6 +1002,16 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Apri", str(e)); return False
 
+    def project_browser(self):
+        from .project_browser import ProjectBrowser
+        b = ProjectBrowser(self); b.exec()
+        if b.choice == ("new", None):
+            self.new()
+        elif b.choice and b.choice[0] == "open":
+            self.open()
+        elif b.choice and b.choice[0] == "path":
+            self.open_path(b.choice[1])
+
     def _fill_recent(self):
         import os
         from ..light import recents
@@ -1059,6 +1070,13 @@ def main() -> int:
     last = recents.load()
     if S.load()["open_last"] and last and os.path.exists(last[0]):
         w.open_path(last[0])
+    elif last and "--no-browser" not in sys.argv:
+        from .project_browser import ProjectBrowser
+        b = ProjectBrowser(w); b.exec()
+        if b.choice and b.choice[0] == "open":
+            w.open()
+        elif b.choice and b.choice[0] == "path":
+            w.open_path(b.choice[1])
     return app.exec()
 
 
