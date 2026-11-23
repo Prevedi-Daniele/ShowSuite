@@ -18,6 +18,7 @@ from ..light.control.midi import MidiController
 from ..light.control.osc import OscServer
 from . import theme
 from .design_view import DesignView
+from .effect_view import EffectView
 from .patch_window import PatchWindow
 from .monitor_windows import ControlLogWindow, DmxMonitor
 from ..light.control.log import ControlLog
@@ -424,6 +425,7 @@ class TransportBar(QToolBar):
         self.out.toggled.connect(win._toggle_output)
         self.design = QPushButton("Design"); self.design.setCheckable(True)
         self.live = QPushButton("Live"); self.live.setCheckable(True)
+        self.effects = QPushButton("Effetti"); self.effects.setCheckable(True)
         CAP = ("QPushButton,QLabel#cap{background:#272a32;border:1px solid #33363f;border-radius:10px;"
                "padding:4px 12px;min-height:16px;} QPushButton:checked{background:#3a8bff;}")
         self.setStyleSheet(CAP)
@@ -500,7 +502,8 @@ class MainWindow(QMainWindow):
         scroll.setMinimumWidth(320)
         self.design = DesignView(self.engine, scroll)
         self.stack = QStackedWidget()
-        self.stack.addWidget(self.design); self.stack.addWidget(self.live_view)
+        self.effect_view = EffectView(self)
+        self.stack.addWidget(self.design); self.stack.addWidget(self.live_view); self.stack.addWidget(self.effect_view)
         self.palette_tree = QTreeWidget(); self.palette_tree.setHeaderHidden(True)
         self.palette_tree.itemDoubleClicked.connect(self._apply_preset_item)
         self.shortcuts = QLabel(SHORTCUT_TEXT); self.shortcuts.setStyleSheet("color:#8b90a0;padding:6px;")
@@ -511,7 +514,7 @@ class MainWindow(QMainWindow):
         top.setSizes([180, 760, 220])
         self.bar = TransportBar(self)
         tabs = QWidget(); th = QHBoxLayout(tabs); th.setContentsMargins(8, 4, 8, 0); th.addStretch()
-        for b in (self.bar.design, self.bar.live):
+        for b in (self.bar.design, self.bar.live, self.bar.effects):
             b.setStyleSheet("QPushButton{border-radius:13px;padding:4px 22px;min-height:18px;}"); th.addWidget(b)
         th.addStretch()
         bottom = QWidget(); bv = QVBoxLayout(bottom); bv.setContentsMargins(0, 0, 0, 0); bv.setSpacing(0)
@@ -521,6 +524,7 @@ class MainWindow(QMainWindow):
         self.addToolBar(self.bar)
         self.bar.design.clicked.connect(lambda: self.show_view(0))
         self.bar.live.clicked.connect(lambda: self.show_view(1))
+        self.bar.effects.clicked.connect(lambda: self.show_view(2))
         self.show_view(1)
         self._menus()
         self.timer = QTimer(self); self.timer.timeout.connect(self._tick); self.timer.start(40)
@@ -561,7 +565,9 @@ class MainWindow(QMainWindow):
 
     def show_view(self, i: int) -> None:
         self.stack.setCurrentIndex(i)
-        self.bar.design.setChecked(i == 0); self.bar.live.setChecked(i == 1)
+        self.bar.design.setChecked(i == 0); self.bar.live.setChecked(i == 1); self.bar.effects.setChecked(i == 2)
+        if i != 2 and self.effect_view.try_btn.isChecked():
+            self.effect_view.try_btn.setChecked(False)
 
     @property
     def out_btn(self):
@@ -580,7 +586,7 @@ class MainWindow(QMainWindow):
         act(m, "Nuovo", self.new, "Ctrl+N"); act(m, "Apri…", self.open, "Ctrl+O")
         act(m, "Salva", self.save, "Ctrl+S"); act(m, "Salva con nome…", self.save_as)
         v = self.menuBar().addMenu("Vista")
-        act(v, "Design", lambda: self.show_view(0), "Ctrl+D"); act(v, "Live", lambda: self.show_view(1), "Ctrl+L")
+        act(v, "Design", lambda: self.show_view(0), "Ctrl+D"); act(v, "Live", lambda: self.show_view(1), "Ctrl+L"); act(v, "Effetti", lambda: self.show_view(2), "Ctrl+E")
         p = self.menuBar().addMenu("Patch")
         act(p, "Finestra Patch…", self.patch_window, "Ctrl+P")
         act(p, "Aggiungi fixture…", self.add_fixture); act(p, "Rimuovi selezionati", self.remove_fixture)
