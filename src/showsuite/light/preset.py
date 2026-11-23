@@ -15,6 +15,7 @@ class Preset:
 class Palette:
     name: str
     presets: list[Preset] = field(default_factory=list)
+    group: str = ""          # cartella (gruppo di fixture) a cui appartiene; vuoto = tutti
 
     def get(self, name: str) -> Preset:
         for p in self.presets:

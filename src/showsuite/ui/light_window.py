@@ -19,6 +19,7 @@ from ..light.control.osc import OscServer
 from . import theme
 from .design_view import DesignView
 from .effect_view import EffectView
+from .palette_tree import PaletteTree
 from .patch_window import PatchWindow
 from .monitor_windows import ControlLogWindow, DmxMonitor
 from ..light.control.log import ControlLog
@@ -454,6 +455,8 @@ class TransportBar(QToolBar):
         self.addSeparator()
         self.addWidget(QLabel("BPM")); self.addWidget(self.bpm); self.addWidget(tap)
         self.addWidget(QLabel("Master")); self.addWidget(self.master)
+        self.add_btn.clicked.connect(lambda: win.palette_tree.add_from_programmer())
+        self.search.textChanged.connect(lambda t: win.palette_tree.set_filter(t))
         for w in (self.bo, self.hl, self.out, self.add_btn, self.search):
             self.addWidget(w)
 
@@ -495,7 +498,7 @@ class MainWindow(QMainWindow):
         self.grouplist.itemClicked.connect(lambda it: self.preview.select_group(it.text()))
         self.grouplist.setContextMenuPolicy(Qt.CustomContextMenu)
         self.grouplist.customContextMenuRequested.connect(self._group_menu)
-        self.preview.groups_changed.connect(self._refresh_groups)
+        self.preview.groups_changed.connect(self._refresh_groups); self.preview.groups_changed.connect(lambda: self.palette_tree.refresh())
         left = QWidget(); lv = QVBoxLayout(left); lv.addWidget(QLabel("Patch")); lv.addWidget(self.fixlist)
         lv.addWidget(QLabel("Gruppi")); lv.addWidget(self.grouplist)
         scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setWidget(self.faders)
@@ -504,8 +507,7 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.effect_view = EffectView(self)
         self.stack.addWidget(self.design); self.stack.addWidget(self.live_view); self.stack.addWidget(self.effect_view)
-        self.palette_tree = QTreeWidget(); self.palette_tree.setHeaderHidden(True)
-        self.palette_tree.itemDoubleClicked.connect(self._apply_preset_item)
+        self.palette_tree = PaletteTree(self)
         self.shortcuts = QLabel(SHORTCUT_TEXT); self.shortcuts.setStyleSheet("color:#8b90a0;padding:6px;")
         right = QWidget(); rv = QVBoxLayout(right); rv.setContentsMargins(0, 0, 0, 0)
         rv.addWidget(QLabel("<b>Preset Palette</b>")); rv.addWidget(self.palette_tree, 1)
@@ -530,26 +532,8 @@ class MainWindow(QMainWindow):
         self.timer = QTimer(self); self.timer.timeout.connect(self._tick); self.timer.start(40)
         self._retitle(); self._refresh_list(); self._refresh_palette()
 
-    def _apply_preset_item(self, item, _col=0):
-        pr = item.data(0, Qt.UserRole)
-        names = self.selected_names()
-        if pr is None or not names:
-            return
-        for n in names:
-            for ch, v in pr.values.items():
-                try:
-                    self.engine.set_value(n, ch, v)
-                except KeyError:
-                    pass
-        self.design.refresh_dots()
-
     def _refresh_palette(self):
-        self.palette_tree.clear()
-        for pal in self.engine.project.palettes:
-            top = QTreeWidgetItem([pal.name]); self.palette_tree.addTopLevelItem(top)
-            for pr in pal.presets:
-                it = QTreeWidgetItem([pr.name]); it.setData(0, Qt.UserRole, pr); top.addChild(it)
-        self.palette_tree.expandAll()
+        self.palette_tree.refresh()
 
     def set_locked(self, on: bool):
         self.design.setEnabled(not on); self.preview.setEnabled(not on)

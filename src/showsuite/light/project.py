@@ -118,7 +118,7 @@ def save(project: Project, path: str) -> None:
     doc = {"schema_version": SCHEMA_VERSION, "name": project.name, "fixtures": fixtures,
            "outputs": [{"type": o.type, "universe": o.universe, "params": o.params}
                        for o in project.outputs],
-           "palettes": [{"name": p.name, "presets": [{"name": x.name, "values": x.values}
+           "palettes": [{"name": p.name, "group": p.group, "presets": [{"name": x.name, "values": x.values}
                                                      for x in p.presets]} for p in project.palettes],
            "cues": [_cue_to_dict(c) for c in project.cues],
            "pages": [{"name": p.name, "priority": p.priority, "fade_time": p.fade_time,
@@ -157,7 +157,7 @@ def load(path: str) -> Project:
                                        f.get("hide_beam", False)))
     proj.outputs = [OutputConfig(o["type"], o["universe"], o.get("params", {}))
                     for o in doc["outputs"]]
-    proj.palettes = [Palette(p["name"], [Preset(x["name"], x["values"]) for x in p["presets"]])
+    proj.palettes = [Palette(p["name"], [Preset(x["name"], x["values"]) for x in p["presets"]], p.get("group", ""))
                      for p in doc.get("palettes", [])]
     proj.cues = [_cue_from_dict(c) for c in doc.get("cues", [])]
     proj.pages = [LivePage(p["name"], [LiveButton(**b) for b in p.get("buttons", [])], p.get("priority", 0),
