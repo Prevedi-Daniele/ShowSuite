@@ -248,3 +248,17 @@ def test_crossfade_dialog_smoke():
     w = MainWindow(); w.engine.project.cues = [LiveCue("A", []), LiveCue("B", [])]
     w.live_view.crossfade_dialog(); w.live_view._xf.findChild(QSlider).setValue(500)
     assert w.engine.live.active["A"]["fader"] == 0.5
+
+
+def test_patch_menu_actions_smoke(tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+    from showsuite.light.fixtures import FixtureInstance, generic_rgb
+    from showsuite.ui.light_window import MainWindow
+    w = MainWindow(); w.engine.project.patch.add(FixtureInstance("A", generic_rgb(), 1, 1))
+    w.preview.set_selection(["A"]); w.duplicate_fixtures()
+    assert [f.name for f in w.engine.project.patch.fixtures] == ["A", "A 2"]
+    out = tmp_path / "p.pdf"
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(out), "")))
+    w.print_patch(); assert out.exists() and out.stat().st_size > 500
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(tmp_path / "f.json"), "")))
+    w.export_fixtures(); assert (tmp_path / "f.json").exists()

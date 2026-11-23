@@ -123,10 +123,12 @@ def test_monitor_windows_smoke():
     from showsuite.light.engine import LightEngine
     from showsuite.light.fixtures import FixtureInstance, generic_rgb
     from showsuite.ui.monitor_windows import ControlLogWindow, DmxMonitor
-    app = QApplication.instance() or QApplication([])
+    global _APP
+    _APP = QApplication.instance() or QApplication([])      # resta viva fino a fine processo (evita crash allo spegnimento)
     e = LightEngine(); e.project.patch.add(FixtureInstance("A", generic_rgb(), 1, 5))
     e.set_value("A", "Red", 200)
     mon = DmxMonitor(e, ["A"])
     assert mon.table.rowCount() == 3 and mon.table.item(0, 0).text() == "5" and mon.table.item(0, 3).text() == "200"
     log = ControlLog(); log.add("midi", "X", "Channel 0: CC 7 (1)", "ok")
     w = ControlLogWindow(log); assert w.table.rowCount() == 1
+    mon.close(); w.close(); mon.deleteLater(); w.deleteLater()

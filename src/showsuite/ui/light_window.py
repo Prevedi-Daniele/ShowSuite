@@ -623,6 +623,11 @@ class MainWindow(QMainWindow):
         p = self.menuBar().addMenu("Patch")
         act(p, "Finestra Patch…", self.patch_window, "Ctrl+P")
         act(p, "Aggiungi fixture…", self.add_fixture); act(p, "Rimuovi selezionati", self.remove_fixture)
+        act(p, "Duplica selezionati", self.duplicate_fixtures, "Ctrl+Alt+D")
+        act(p, "Cambia indirizzo…", self.change_address); act(p, "Riassegna profilo…", self.reassign_profile)
+        act(p, "Opzioni fixture…", self.fixture_options, "Ctrl+Shift+Alt+F")
+        act(p, "Stampa/esporta patch in PDF…", self.print_patch)
+        act(p, "Esporta fixture selezionati…", self.export_fixtures); act(p, "Importa fixture…", self.import_fixtures)
         act(p, "Importa profilo OFL…", self.import_ofl)
         act(p, "Azzera valori", self.clear_values)
         act(p, "Registra cue dalla selezione…", self.record_cue, "Ctrl+R")
@@ -731,6 +736,77 @@ class MainWindow(QMainWindow):
             self.engine.remove_fixture(n)
         self.preview.set_selection([])
         self._refresh_list()
+
+    def _patch_changed(self):
+        self.preview.update(); self._refresh_list()
+
+    def duplicate_fixtures(self):
+        from ..light import patchtools as T
+        try:
+            T.duplicate_fixtures(self.engine.project.patch, self.selected_names())
+        except Exception as e:
+            QMessageBox.warning(self, "Duplica", str(e))
+        self._patch_changed()
+
+    def change_address(self):
+        from ..light import patchtools as T
+        names = self.selected_names()
+        if len(names) != 1:
+            self.statusBar().showMessage("Seleziona un solo fixture"); return
+        fx = self.engine.project.patch.find(names[0])
+        a, ok = QInputDialog.getInt(self, "Indirizzo", f"{fx.name} — universo {fx.universe}, indirizzo:", fx.address, 1, 512)
+        if ok:
+            try:
+                T.change_address(self.engine.project.patch, fx.name, fx.universe, a)
+            except Exception as e:
+                QMessageBox.warning(self, "Indirizzo", str(e))
+            self._patch_changed()
+
+    def reassign_profile(self):
+        from ..light import patchtools as T
+        names = self.selected_names()
+        if not names:
+            return
+        keys = list(self.engine.library)
+        k, ok = QInputDialog.getItem(self, "Riassegna profilo", "Nuovo profilo:", keys, 0, False)
+        if ok:
+            try:
+                for n in names:
+                    T.reassign_profile(self.engine, n, self.engine.library[k])
+            except Exception as e:
+                QMessageBox.warning(self, "Profilo", str(e))
+            self._patch_changed()
+
+    def fixture_options(self):
+        names = self.selected_names()
+        if names:
+            from .fixture_options import FixtureOptionsDialog
+            FixtureOptionsDialog([self.engine.project.patch.find(n) for n in names], self).exec(); self.preview.update()
+
+    def print_patch(self):
+        from PySide6.QtGui import QPageSize, QPdfWriter, QTextDocument
+        from ..light import patchtools as T
+        f, _ = QFileDialog.getSaveFileName(self, "Patch in PDF", "patch.pdf", "PDF (*.pdf)")
+        if f:
+            w = QPdfWriter(f); w.setPageSize(QPageSize(QPageSize.A4))
+            d = QTextDocument(); d.setHtml(T.patch_html(self.engine.project)); d.print_(w)
+
+    def export_fixtures(self):
+        from ..light import patchtools as T
+        names = self.selected_names() or [f.name for f in self.engine.project.patch.fixtures]
+        f, _ = QFileDialog.getSaveFileName(self, "Esporta fixture", "fixtures.json", "Fixture (*.json)")
+        if f:
+            T.export_fixtures(self.engine.project.patch, names, f)
+
+    def import_fixtures(self):
+        from ..light import patchtools as T
+        f, _ = QFileDialog.getOpenFileName(self, "Importa fixture", "", "Fixture (*.json)")
+        if f:
+            try:
+                T.import_fixtures(self.engine.project.patch, f)
+            except Exception as e:
+                QMessageBox.warning(self, "Importa", str(e))
+            self._patch_changed()
 
     def import_ofl(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Importa profili OFL", "", "Fixture OFL (*.json)")
