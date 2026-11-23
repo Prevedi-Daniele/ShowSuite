@@ -109,3 +109,18 @@ def select_by_profile(patch, fixture_name: str) -> list[str]:
     ref = patch.find(fixture_name).profile
     key = (ref.manufacturer, ref.model, ref.mode)
     return [f.name for f in patch.fixtures if (f.profile.manufacturer, f.profile.model, f.profile.mode) == key]
+
+
+def duplicate_shape(shapes: list, sh, dx: float = 0.03, dy: float = 0.03):
+    """Copia la forma (spostata di dx,dy) subito sopra l'originale nell'ordine di sovrapposizione."""
+    import dataclasses
+    new = dataclasses.replace(sh, x1=sh.x1 + dx, y1=sh.y1 + dy, x2=sh.x2 + dx, y2=sh.y2 + dy)
+    shapes.insert(shapes.index(sh) + 1, new)
+    return new
+
+
+def reorder_shape(shapes: list, sh, where: str) -> None:
+    """where: front | back | up | down (l'ultimo della lista è disegnato sopra)."""
+    i = shapes.index(sh); shapes.pop(i)
+    j = {"front": len(shapes), "back": 0, "up": min(i + 1, len(shapes)), "down": max(i - 1, 0)}[where]
+    shapes.insert(j, sh)

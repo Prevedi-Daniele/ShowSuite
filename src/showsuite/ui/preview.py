@@ -8,7 +8,7 @@ from PySide6.QtGui import QPixmap, QBrush, QColor, QLinearGradient, QPainter, QP
 from PySide6.QtWidgets import QInputDialog, QMenu, QWidget
 
 from ..light.engine import LightEngine
-from ..light.stage import ALIGN_MODES, StageShape, align, distribute, make_group, select_by_profile
+from ..light.stage import duplicate_shape, reorder_shape, ALIGN_MODES, StageShape, align, distribute, make_group, select_by_profile
 from .theme import ACCENT
 
 BEAM_LEN = 130.0
@@ -315,6 +315,23 @@ class PreviewWidget(QWidget):
             self.set_selection([names[(i + step) % len(names)]])
         elif e.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self.edit_mode and self.sel_shape:
             self.engine.project.shapes.remove(self.sel_shape); self.sel_shape = None
+        elif self.edit_mode and self.sel_shape and e.modifiers() & Qt.ControlModifier and e.key() in (
+                Qt.Key_D, Qt.Key_C, Qt.Key_BracketRight, Qt.Key_BracketLeft):
+            shapes = self.engine.project.shapes
+            if e.key() == Qt.Key_D:
+                self.sel_shape = duplicate_shape(shapes, self.sel_shape)
+            elif e.key() == Qt.Key_C:
+                self._shape_clip = self.sel_shape
+            else:
+                reorder_shape(shapes, self.sel_shape, ("up" if not e.modifiers() & Qt.ShiftModifier else "front")
+                              if e.key() == Qt.Key_BracketRight else ("down" if not e.modifiers() & Qt.ShiftModifier else "back"))
+        elif self.edit_mode and e.modifiers() & Qt.ControlModifier and e.key() == Qt.Key_V and getattr(self, "_shape_clip", None):
+            self.sel_shape = self._shape_clip = duplicate_shape(self.engine.project.shapes, self._shape_clip) \
+                if self._shape_clip in self.engine.project.shapes else duplicate_shape(self.engine.project.shapes, self.engine.project.shapes[-1])
+        elif self.edit_mode and self.sel_shape and e.key() in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down):
+            d = 0.05 if e.modifiers() & Qt.ShiftModifier else 0.005
+            dx = {Qt.Key_Left: -d, Qt.Key_Right: d}.get(e.key(), 0); dy = {Qt.Key_Up: -d, Qt.Key_Down: d}.get(e.key(), 0)
+            sh = self.sel_shape; sh.x1 += dx; sh.x2 += dx; sh.y1 += dy; sh.y2 += dy
         elif e.key() == Qt.Key_A and e.modifiers() & Qt.ControlModifier:
             self.set_selection([f.name for f in self.engine.project.patch.fixtures])
         elif e.text() and e.text().isprintable() and not (e.modifiers() & Qt.ControlModifier):

@@ -139,3 +139,13 @@ def test_fanning():
     assert fan(e, ["F0", "F1", "F2"], "hue", 0, 0.5) == 3
     r0, r2 = e.values["F0"], e.values["F2"]
     assert r0 != r2
+
+
+def test_duplicate_and_reorder_shapes():
+    from showsuite.light.stage import duplicate_shape, reorder_shape
+    a, b, c = StageShape("truss", 0, 0, 1, 0), StageShape("line", 0, .5, 1, .5), StageShape("text", .5, .5, text="x")
+    s = [a, b, c]
+    d = duplicate_shape(s, a); assert s == [a, d, b, c] and d.x1 == 0.03 and a.x1 == 0
+    reorder_shape(s, a, "front"); assert s[-1] is a
+    reorder_shape(s, a, "back"); assert s[0] is a
+    reorder_shape(s, a, "up"); assert s[1] is a
