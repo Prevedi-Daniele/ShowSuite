@@ -204,3 +204,28 @@ def set_position(engine: LightEngine, fixtures: list[str], pan: float | None = N
             if c and v is not None:
                 engine.set_value(f, c.name, round(max(0, min(1, v)) * (65535 if c.fine else 255))); n += 1
     return n
+
+
+def copy_properties(engine: LightEngine, fixture: str) -> dict[str, int]:
+    """Valori del programmer del fixture, indicizzati per tipo di canale (o nome se senza tipo)."""
+    prof = engine.project.patch.find(fixture).profile
+    out = {}
+    for c in prof.channels:
+        if c.name in engine.values.get(fixture, {}):
+            out[c.kind or c.name] = engine.values[fixture][c.name]
+    return out
+
+
+def paste_properties(engine: LightEngine, fixtures: list[str], data: dict[str, int]) -> int:
+    n = 0
+    for f in fixtures:
+        for c in engine.project.patch.find(f).profile.channels:
+            k = c.kind or c.name
+            if k in data:
+                engine.set_value(f, c.name, data[k]); n += 1
+    return n
+
+
+def reset_to_default(engine: LightEngine, fixtures: list[str]) -> None:
+    for f in fixtures:
+        engine.values.pop(f, None)

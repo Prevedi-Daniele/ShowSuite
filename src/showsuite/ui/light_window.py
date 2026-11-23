@@ -575,6 +575,9 @@ class MainWindow(QMainWindow):
         act(m, "Salva", self.save, "Ctrl+S"); act(m, "Salva con nome…", self.save_as)
         ed = self.menuBar().addMenu("Modifica")
         self.act_undo = act(ed, "Annulla", self.undo, "Ctrl+Z"); self.act_redo = act(ed, "Ripristina", self.redo, "Ctrl+Shift+Z")
+        ed.addSeparator()
+        act(ed, "Copia proprietà", self.copy_props, "Ctrl+Alt+C"); act(ed, "Incolla proprietà", self.paste_props, "Ctrl+Alt+V")
+        act(ed, "Ripristina valori predefiniti", self.reset_props)
         v = self.menuBar().addMenu("Vista")
         act(v, "Design", lambda: self.show_view(0), "Ctrl+D"); act(v, "Live", lambda: self.show_view(1), "Ctrl+L"); act(v, "Effetti", lambda: self.show_view(2), "Ctrl+E")
         p = self.menuBar().addMenu("Patch")
@@ -819,6 +822,22 @@ class MainWindow(QMainWindow):
         self.engine.live.active.clear()
         self.preview.set_selection([n for n in sel if n in valid])
         self._retitle(); self._refresh_list(); self._refresh_palette(); self.live_view.rebuild(); self.preview.update()
+
+    def copy_props(self) -> None:
+        names = self.selected_names()
+        if names:
+            from ..light import properties as P
+            self._prop_clip = P.copy_properties(self.engine, names[0])
+
+    def paste_props(self) -> None:
+        from ..light import properties as P
+        if getattr(self, "_prop_clip", None) and self.selected_names():
+            P.paste_properties(self.engine, self.selected_names(), self._prop_clip)
+            self.design.refresh_dots()
+
+    def reset_props(self) -> None:
+        from ..light import properties as P
+        P.reset_to_default(self.engine, self.selected_names()); self.design.refresh_dots()
 
     def undo(self) -> None:
         self.snapshot(); self._restore(self.undo_stack.undo())

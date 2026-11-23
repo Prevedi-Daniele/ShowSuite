@@ -87,3 +87,16 @@ def test_position_pad_degrees():
     pad.spins[0].setValue(135.0); pad.spins[1].setValue(-67.5)
     assert got[0][0] == 0.75 and got[1][1] == 0.25
     pad.pad.moved.emit(0.5, 0.5); assert pad.spins[0].value() == 0
+
+
+def test_copy_paste_reset():
+    from showsuite.light import project as pj, properties as P
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.fixtures import FixtureInstance, generic_rgb
+    pr = pj.Project("C")
+    for i in range(2):
+        pr.patch.add(FixtureInstance(f"F{i}", generic_rgb(), 1, 1 + i * 3))
+    e = LightEngine(pr); P.set_color(e, ["F0"], (255, 0, 0))
+    assert P.paste_properties(e, ["F1"], P.copy_properties(e, "F0")) > 0
+    assert e.values["F1"] == e.values["F0"]
+    P.reset_to_default(e, ["F1"]); assert "F1" not in e.values
