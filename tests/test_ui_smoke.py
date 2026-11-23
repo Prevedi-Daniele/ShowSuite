@@ -216,3 +216,26 @@ def test_live_view_frames_faders_and_groups():
     w.engine.live.update(); assert w.engine.mixer.render(1)[1] == 128 or w.engine.mixer.render(1)[1] == 127
     lv.set_edit(True); assert lv.edit_mode
     w.close()
+
+
+def test_button_popover_edits_cue():
+    from PySide6.QtWidgets import QApplication
+    from showsuite.light.colorfx import ColorEffect
+    from showsuite.light.live import LiveCue
+    from showsuite.light.preset import Preset
+    from showsuite.ui.button_popover import ButtonPopover
+    from showsuite.ui.light_window import AddFixtureDialog, MainWindow
+    app = QApplication.instance() or QApplication([])
+    w = MainWindow(); d = AddFixtureDialog(w.engine, w); d.prof.setCurrentIndex(1); d.create()
+    cue = LiveCue("X", ["Fixture"], Preset("p", {"Red": 255}), color_fx=ColorEffect())
+    w.engine.project.cues.append(cue); w.live_view.add_cue_button("X")
+    btn = w.live_view.page.buttons[0]; pop = ButtonPopover(w.live_view, btn, cue)
+    assert pop.items.count() == 3                       # fixture, preset, color effect
+    pop._maybe_remove(pop.items.item(1)); assert cue.preset is None and pop.items.count() == 2
+    pop._maybe_remove(pop.items.item(0)); assert pop.items.count() == 2                # la riga fixture non si rimuove
+    pop.mode.setCurrentIndex(1); assert btn.mode == "flash" and cue.toggle is False
+    pop.fade_in.setValue(2.5); pop.curve.setCurrentText("ease_in"); pop.prio.setValue(30)
+    assert (cue.fade_in, cue.curve, cue.priority) == (2.5, "ease_in", 30)
+    pop.speed.setValue(200); pop.dimmer.setValue(50)
+    assert cue.speed == 2.0 and cue.dimmer == 0.5
+    pop.grab(); w.close()

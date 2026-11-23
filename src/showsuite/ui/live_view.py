@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QColorDialog, QFrame, QGridLayout, QHBoxLayout, Q
 from ..light.engine import LightEngine
 from ..light.live import CueList, LiveButton, LivePage
 from .cuelist_view import CueListView
+from .button_popover import ButtonPopover
 
 
 def _text_on(color: QColor) -> str:
@@ -43,6 +44,10 @@ class CueButton(QPushButton):
             bg, fg = QColor(col.red() // 4 + 28, col.green() // 4 + 28, col.blue() // 4 + 28), col.lighter(135).name()
         self.setStyleSheet(f"QPushButton {{ background: {bg.name()}; color: {fg}; border: none; border-radius: 2px;"
                            f" text-align: left; padding: 6px 10px; font-weight: {'700' if active else '500'}; }}")
+
+    def mouseDoubleClickEvent(self, e):
+        if self.view.edit_mode and e.button() == Qt.LeftButton:
+            self.view.open_popover(self)
 
     def mousePressEvent(self, e):
         if e.button() != Qt.LeftButton:
@@ -268,6 +273,8 @@ class LiveView(QWidget):
     def button_menu(self, w, pos) -> None:
         b, p = w.btn, self.page
         m = QMenu(w)
+        m.addAction("Proprietà…", lambda: self.open_popover(w))
+        m.addSeparator()
         if isinstance(w, CueButton):
             m.addAction("Modalità: " + ("Toggle" if b.mode == "flash" else "Flash"),
                         lambda: setattr(b, "mode", "toggle" if b.mode == "flash" else "flash"))
@@ -283,6 +290,13 @@ class LiveView(QWidget):
         m.addAction("Etichetta…", lambda: self._pick_label(b))
         m.addAction("Rimuovi dalla pagina", lambda: (p.buttons.remove(b), self._fill_grid()))
         m.exec(w.mapToGlobal(pos))
+
+    def open_popover(self, w) -> None:
+        cue = w.cue()
+        if cue is None:
+            return
+        ButtonPopover(self, w.btn, cue).exec()
+        self._fill_grid()
 
     def _pick_color(self, b) -> None:
         c = QColorDialog.getColor(QColor(b.color), self, "Colore")
