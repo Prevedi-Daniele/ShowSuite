@@ -192,6 +192,8 @@ class PreviewWidget(QWidget):
             o = self._pos(fx)
             grad = QLinearGradient(o, QPointF(o.x() - math.sin(math.radians(fx.rotation)) * BEAM_LEN,
                                               o.y() + math.cos(math.radians(fx.rotation)) * BEAM_LEN))
+            if fx.beam_color and QColor(fx.beam_color).isValid():     # colore del raggio forzato, intensità reale
+                bc = QColor(fx.beam_color); r, g, b = bc.red(), bc.green(), bc.blue()
             col = QColor(r, g, b)
             col.setAlphaF(0.55 * level)
             end = QColor(r, g, b); end.setAlphaF(0.0)
@@ -204,15 +206,21 @@ class PreviewWidget(QWidget):
             sel = fx.name in self.selection
             p.setBrush(QBrush(QColor(r, g, b)))
             p.setPen(QPen(QColor(ACCENT) if sel else QColor(110, 114, 128), 3 if sel else 1.5))
+            R = 16 * max(0.5, min(2.0, fx.icon_size))
+            if fx.disabled:
+                p.setOpacity(0.35)
             if fx.profile.is_mover:
-                p.drawRoundedRect(QRectF(c.x() - 16, c.y() - 16, 32, 32), 8, 8)
+                p.drawRoundedRect(QRectF(c.x() - R, c.y() - R, 2 * R, 2 * R), R / 2, R / 2)
                 p.setPen(QPen(QColor(20, 20, 24), 2))
-                p.drawLine(c, QPointF(c.x() - math.sin(math.radians(fx.rotation)) * 14,
-                                      c.y() + math.cos(math.radians(fx.rotation)) * 14))
+                p.drawLine(c, QPointF(c.x() - math.sin(math.radians(fx.rotation)) * R * 0.875,
+                                      c.y() + math.cos(math.radians(fx.rotation)) * R * 0.875))
             else:
-                p.drawEllipse(c, 16, 16)
+                p.drawEllipse(c, R, R)
             p.setPen(QColor(205, 208, 218) if sel else QColor(150, 154, 168))
-            p.drawText(QRectF(c.x() - 50, c.y() + 20, 100, 18), Qt.AlignCenter, fx.name)
+            if fx.name_pos != "hidden":
+                y = c.y() + R + 4 if fx.name_pos != "above" else c.y() - R - 22
+                p.drawText(QRectF(c.x() - 50, y, 100, 18), Qt.AlignCenter, fx.name)
+            p.setOpacity(1.0)
         if self._rubber:
             p.setPen(QPen(QColor(ACCENT), 1, Qt.DashLine))
             p.setBrush(QColor(58, 139, 255, 40))

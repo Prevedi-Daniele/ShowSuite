@@ -175,3 +175,19 @@ def test_preview_zoom_keeps_hit_testing():
     screen = w.pan + QPointF(200, 150) * w.zoom          # dove il fixture appare ora
     assert w._hit(w._map(screen)) == "A" and w.zoom == 2.0
     w.reset_zoom(); assert w.zoom == 1.0 and w.pan == QPointF(0, 0)
+
+
+def test_fixture_display_options_roundtrip_and_paint(tmp_path):
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from showsuite.light.engine import LightEngine
+    from showsuite.ui.fixture_options import FixtureOptionsDialog
+    from showsuite.ui.preview import PreviewWidget
+    p = pj.Project("D"); f = FixtureInstance("A", generic_rgb(), 1, 1, beam_color="#ff0000", name_pos="above", icon_size=1.5)
+    p.patch.add(f); e = LightEngine(p); e.set_value("A", "Red", 255)
+    w = PreviewWidget(e); w.resize(300, 200); w.grab()
+    dlg = FixtureOptionsDialog([f]); assert dlg.beam_color == "#ff0000" and dlg.icon.value() == 1.5
+    dlg.apply()
+    q = tmp_path / "d.showsuite-light"; pj.save(p, str(q)); g = pj.load(str(q)).patch.fixtures[0]
+    assert (g.beam_color, g.name_pos, g.icon_size) == ("#ff0000", "above", 1.5)

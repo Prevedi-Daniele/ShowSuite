@@ -132,7 +132,8 @@ def save(project: Project, path) -> None:
                          "beam_angle": f.beam_angle, "hide_beam": f.hide_beam,
                          "dimmer_min": f.dimmer_min, "dimmer_max": f.dimmer_max, "ignore_master": f.ignore_master,
                          "pan_range": f.pan_range, "tilt_range": f.tilt_range, "pan_offset": f.pan_offset,
-                         "tilt_offset": f.tilt_offset, "disabled": f.disabled})
+                         "tilt_offset": f.tilt_offset, "disabled": f.disabled,
+                         "beam_color": f.beam_color, "name_pos": f.name_pos, "icon_size": f.icon_size})
     doc = {"schema_version": SCHEMA_VERSION, "name": project.name, "fixtures": fixtures,
            "outputs": [{"type": o.type, "universe": o.universe, "params": o.params}
                        for o in project.outputs],
@@ -184,7 +185,8 @@ def load(path) -> Project:
                                        f.get("rotation", 0.0), f.get("beam_angle", 30.0),
                                        f.get("hide_beam", False), f.get("dimmer_min", 0), f.get("dimmer_max", 255),
                                        f.get("ignore_master", False), f.get("pan_range", 540.0), f.get("tilt_range", 270.0),
-                                       f.get("pan_offset", 0.0), f.get("tilt_offset", 0.0), f.get("disabled", False)))
+                                       f.get("pan_offset", 0.0), f.get("tilt_offset", 0.0), f.get("disabled", False),
+                                       f.get("beam_color", ""), f.get("name_pos", "below"), f.get("icon_size", 1.0)))
     proj.outputs = [OutputConfig(o["type"], o["universe"], o.get("params", {}))
                     for o in doc["outputs"]]
     proj.palettes = [Palette(p["name"], [Preset(x["name"], x["values"]) for x in p["presets"]], p.get("group", ""))

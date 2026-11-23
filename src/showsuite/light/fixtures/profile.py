@@ -78,6 +78,9 @@ class FixtureInstance:
     pan_offset: float = 0.0        # gradi aggiunti a tutti i pan inviati
     tilt_offset: float = 0.0
     disabled: bool = False         # non controllato: tutti i canali a zero, non selezionabile
+    beam_color: str = ""           # colore del raggio nel Preview ("" = colore reale del fixture)
+    name_pos: str = "below"        # nome nel Preview: below | above | hidden
+    icon_size: float = 1.0         # scala del simbolo nel Preview (0.5-2)
 
     @property
     def end_address(self) -> int:
