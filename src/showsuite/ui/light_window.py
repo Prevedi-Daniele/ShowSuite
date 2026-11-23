@@ -496,6 +496,7 @@ class MainWindow(QMainWindow):
         self.fixlist = QListWidget()
         self.fixlist.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.preview.selection_changed.connect(self._on_preview_selection)
+        self.preview.property_key.connect(lambda k: (self.show_view(0), self.design.key(k)))
         self.fixlist.itemSelectionChanged.connect(self._on_list_selection)
         # layout: patch | preview ; sotto Design/Live
         self.grouplist = QListWidget(); self.grouplist.setMaximumHeight(130)

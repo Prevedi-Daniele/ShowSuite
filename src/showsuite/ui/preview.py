@@ -17,6 +17,7 @@ HIT_R = 22
 
 class PreviewWidget(QWidget):
     selection_changed = Signal(list)
+    property_key = Signal(str)       # Shift+lettera: seleziona la proprietà nel Design view
 
     def __init__(self, engine: LightEngine):
         super().__init__()
@@ -334,6 +335,9 @@ class PreviewWidget(QWidget):
             sh = self.sel_shape; sh.x1 += dx; sh.x2 += dx; sh.y1 += dy; sh.y2 += dy
         elif e.key() == Qt.Key_A and e.modifiers() & Qt.ControlModifier:
             self.set_selection([f.name for f in self.engine.project.patch.fixtures])
+        elif (self.selection and e.modifiers() == Qt.ShiftModifier and len(e.text()) == 1
+              and e.text().upper() in "DCGPSMFZIR"):
+            self.property_key.emit(e.text().upper())
         elif e.text() and e.text().isprintable() and not (e.modifiers() & Qt.ControlModifier):
             self._typed += e.text().lower().replace(" ", "")
             self._type_timer.start()

@@ -100,3 +100,19 @@ def test_copy_paste_reset():
     assert P.paste_properties(e, ["F1"], P.copy_properties(e, "F0")) > 0
     assert e.values["F1"] == e.values["F0"]
     P.reset_to_default(e, ["F1"]); assert "F1" not in e.values
+
+
+def test_shift_letter_selects_property():
+    import os; os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from showsuite.light import project as pj
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.fixtures import FixtureInstance, generic_rgb
+    from showsuite.ui.preview import PreviewWidget
+    p = pj.Project("K"); p.patch.add(FixtureInstance("F", generic_rgb(), 1, 1))
+    w = PreviewWidget(LightEngine(p)); got = []; w.property_key.connect(got.append)
+    w.set_selection(["F"]); QTest.keyClick(w, Qt.Key_C, Qt.ShiftModifier)
+    assert got == ["C"]
