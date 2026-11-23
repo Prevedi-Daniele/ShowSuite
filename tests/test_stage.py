@@ -126,3 +126,16 @@ def test_fixture_options_engine_and_save(tmp_path):
     f = tmp_path / "o.showsuite-light"; pj.save(p, str(f)); q = pj.load(str(f))
     fa = next(x for x in q.patch.fixtures if x.name == "A")
     assert (fa.dimmer_min, fa.dimmer_max) == (10, 200) and next(x for x in q.patch.fixtures if x.name == "C").disabled
+
+
+def test_fanning():
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.fanning import fan, fan_values
+    assert fan_values(3, 0, 1) == [0, 0.5, 1] and fan_values(3, 0, 1, symmetric=True) == [0, 1, 0]
+    p = pj.Project("F")
+    for i, f in enumerate(fxs((0.1, .5), (0.5, .5), (0.9, .5))):
+        f.address = 1 + i * 3; p.patch.add(f)
+    e = LightEngine(p)
+    assert fan(e, ["F0", "F1", "F2"], "hue", 0, 0.5) == 3
+    r0, r2 = e.values["F0"], e.values["F2"]
+    assert r0 != r2

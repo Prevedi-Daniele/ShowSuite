@@ -347,8 +347,14 @@ class PreviewWidget(QWidget):
         hide = all(f.hide_beam for f in fxs)
         m.addAction("Mostra raggio" if hide else "Nascondi raggio", lambda: self._set_hide(fxs, not hide))
         m.addSeparator()
+        if len(fxs) > 1:
+            m.addAction("Fanning…", lambda: self._fan(fxs))
         m.addAction("Opzioni fixture…", lambda: self._options(fxs))
         m.exec(global_pos)
+
+    def _fan(self, fxs):
+        from .fan_dialog import FanDialog
+        FanDialog(self.engine, [f.name for f in sorted(fxs, key=lambda f: f.x)], self).exec(); self.update()
 
     def _options(self, fxs):
         from .fixture_options import FixtureOptionsDialog
