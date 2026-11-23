@@ -619,6 +619,7 @@ class MainWindow(QMainWindow):
         act(ed, "Cerca nel progetto…", self.search_dialog, "Ctrl+F")
         v = self.menuBar().addMenu("Vista")
         act(v, "Design", lambda: self.show_view(0), "Ctrl+D"); act(v, "Live", lambda: self.show_view(1), "Ctrl+L"); act(v, "Effetti", lambda: self.show_view(2), "Ctrl+E")
+        act(v, "Crossfade manuale…", lambda: self.live_view.crossfade_dialog())
         p = self.menuBar().addMenu("Patch")
         act(p, "Finestra Patch…", self.patch_window, "Ctrl+P")
         act(p, "Aggiungi fixture…", self.add_fixture); act(p, "Rimuovi selezionati", self.remove_fixture)

@@ -3,11 +3,11 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QColorDialog, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QMenu,
+from PySide6.QtWidgets import (QColorDialog, QComboBox, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QMenu,
                                QPushButton, QSlider, QVBoxLayout, QWidget)
 
 from ..light.engine import LightEngine
-from ..light.live import CueList, LiveButton, LivePage, duplicate_button
+from ..light.live import CueList, LiveButton, LivePage, duplicate_button, paste_button
 from .cuelist_view import CueListView
 from .button_popover import ButtonPopover
 
@@ -275,6 +275,10 @@ class LiveView(QWidget):
     def _frame_menu(self, fi: int) -> None:
         m = QMenu(self)
         m.addAction("Aggiungi testo…", lambda: self.add_text(fi))
+        clip = getattr(self, "_btn_clip", None)
+        if clip and clip[1].kind != "text" and self.page:
+            m.addAction("Incolla pulsante", lambda: (paste_button(self.engine.project, clip[0], clip[1], self.page, fi),
+                                                       self._fill_grid()))
         m.addAction("Titolo…", lambda: self._frame_title(fi))
         m.addAction("Nuova cornice", self.add_frame)
         m.exec(self.cursor().pos())
@@ -283,6 +287,25 @@ class LiveView(QWidget):
         t, ok = QInputDialog.getText(self, "Cornice", "Titolo:", text=self.page.frames[fi])
         if ok:
             self.page.frames[fi] = t; self._fill_grid()
+
+    def crossfade_dialog(self) -> None:
+        from PySide6.QtWidgets import QDialog, QFormLayout
+        cues = self.engine.project.cues
+        if len(cues) < 2:
+            return
+        d = QDialog(self); d.setWindowTitle("Crossfade manuale"); f = QFormLayout(d)
+        a, b = QComboBox(), QComboBox()
+        for c in cues:
+            a.addItem(c.name); b.addItem(c.name)
+        b.setCurrentIndex(1)
+        sl = QSlider(Qt.Horizontal); sl.setRange(0, 1000)
+        def move(v):
+            ca, cb = cues[a.currentIndex()], cues[b.currentIndex()]
+            if ca is not cb:
+                self.engine.live.crossfade(ca, cb, v / 1000, self.page.priority if self.page else 0)
+        sl.valueChanged.connect(move)
+        f.addRow("Da", a); f.addRow("A", b); f.addRow("", sl)
+        d.setModal(False); d.show(); self._xf = d
 
     def add_frame(self) -> None:
         if self.page:
@@ -304,6 +327,7 @@ class LiveView(QWidget):
         for i in range(len(p.frames)):
             sub.addAction(f"{i + 1}" + (f" — {p.frames[i]}" if p.frames[i] else ""),
                           lambda i=i: (setattr(b, "frame", i), self._fill_grid()))
+        m.addAction("Copia pulsante", lambda: setattr(self, "_btn_clip", (p, b)))
         m.addAction("Duplica", lambda: (duplicate_button(self.engine.project, p, b), self._fill_grid()))
         m.addAction("Colore…", lambda: self._pick_color(b))
         m.addAction("Etichetta…", lambda: self._pick_label(b))

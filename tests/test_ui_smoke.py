@@ -239,3 +239,12 @@ def test_button_popover_edits_cue():
     pop.speed.setValue(200); pop.dimmer.setValue(50)
     assert cue.speed == 2.0 and cue.dimmer == 0.5
     pop.grab(); w.close()
+
+
+def test_crossfade_dialog_smoke():
+    from PySide6.QtWidgets import QSlider
+    from showsuite.light.live import LiveCue
+    from showsuite.ui.light_window import MainWindow
+    w = MainWindow(); w.engine.project.cues = [LiveCue("A", []), LiveCue("B", [])]
+    w.live_view.crossfade_dialog(); w.live_view._xf.findChild(QSlider).setValue(500)
+    assert w.engine.live.active["A"]["fader"] == 0.5

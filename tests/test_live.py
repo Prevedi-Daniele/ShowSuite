@@ -266,3 +266,17 @@ def test_duplicate_button_and_text(tmp_path):
     assert n.cue == "A copia" and n2.cue == "A copia 2" and len(p.cues) == 3
     f = tmp_path / "d.showsuite-light"; pj.save(p, str(f)); q = pj.load(str(f))
     assert [b.kind for b in q.pages[0].buttons].count("text") == 1
+
+
+def test_manual_crossfade_and_paste_between_pages():
+    from showsuite.light import project as pj
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.live import LiveButton, LiveCue, LivePage, paste_button
+    p = pj.Project("X"); p.cues = [LiveCue("A", []), LiveCue("B", [])]
+    e = LightEngine(p)
+    e.live.crossfade(p.cues[0], p.cues[1], 0.25)
+    assert e.live.active["A"]["fader"] == 0.75 and e.live.active["B"]["fader"] == 0.25
+    e.live.crossfade(p.cues[0], p.cues[1], 1.0); assert "A" not in e.live.active
+    p1, p2 = LivePage("1", [LiveButton("A")]), LivePage("2")
+    n = paste_button(p, p1, p1.buttons[0], p2, frame=0)
+    assert p2.buttons == [n] and n.cue == "A copia" and len(p1.buttons) == 1 and len(p.cues) == 3

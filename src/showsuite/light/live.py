@@ -91,6 +91,17 @@ def duplicate_button(project, page, btn):
     return new
 
 
+def paste_button(project, src_page, btn, dst_page, frame: int = 0):
+    """Copia `btn` (con il suo cue) in un'altra pagina: ritorna il nuovo pulsante."""
+    import copy
+    tmp = LivePage("_tmp", [btn])
+    new = duplicate_button(project, tmp, btn)
+    tmp.buttons.remove(btn)          # duplicate_button l'ha messo accanto all'originale nella pagina temporanea
+    new.frame = frame
+    dst_page.buttons.append(new)
+    return new
+
+
 @dataclass
 class LivePage:
     name: str
@@ -149,6 +160,12 @@ class LivePlayer:
                 self._begin(cue, page_priority)
                 st = self.active[cue.name]
             st["fader"] = value
+
+    def crossfade(self, a: LiveCue, b: LiveCue, x: float, page_priority: int = 0) -> None:
+        """Crossfade manuale: x=0 solo A, x=1 solo B, in mezzo entrambi proporzionali."""
+        x = max(0.0, min(1.0, x))
+        self.set_fader(a, 1.0 - x, page_priority)
+        self.set_fader(b, x, page_priority)
 
     def _trigger(self, cue: LiveCue, page_priority: int = 0) -> None:
         st = self.active.get(cue.name)
