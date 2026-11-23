@@ -13,6 +13,23 @@ class StageShape:
     y2: float = 0.0
     text: str = ""
     color: str = "#c8cad4"
+    bulge: float = 0.0        # curvatura: 0 = dritto; ±1 = freccia pari alla lunghezza della corda
+
+    def control(self) -> tuple[float, float]:
+        mx, my = (self.x1 + self.x2) / 2, (self.y1 + self.y2) / 2
+        dx, dy = self.x2 - self.x1, self.y2 - self.y1
+        return mx - dy * self.bulge, my + dx * self.bulge     # normale alla corda, lato "sinistro"
+
+    def points(self, n: int = 40) -> list[tuple[float, float]]:
+        """Polilinea lungo la forma (Bézier quadratica se curva)."""
+        if self.kind == "text":
+            return [(self.x1, self.y1), (self.x2, self.y2)]
+        cx, cy = self.control(); out = []
+        for i in range(n + 1):
+            t = i / n; u = 1 - t
+            out.append((u * u * self.x1 + 2 * u * t * cx + t * t * self.x2,
+                        u * u * self.y1 + 2 * u * t * cy + t * t * self.y2))
+        return out
 
     def bounds(self) -> tuple[float, float, float, float]:
         return (min(self.x1, self.x2), min(self.y1, self.y2), max(self.x1, self.x2), max(self.y1, self.y2))
@@ -21,11 +38,13 @@ class StageShape:
         """Distanza (in coordinate normalizzate) dal punto; per il testo dal suo punto di ancoraggio."""
         if self.kind == "text":
             return ((x - self.x1) ** 2 + (y - self.y1) ** 2) ** 0.5
-        dx, dy = self.x2 - self.x1, self.y2 - self.y1
-        l2 = dx * dx + dy * dy
-        t = 0.0 if l2 == 0 else max(0.0, min(1.0, ((x - self.x1) * dx + (y - self.y1) * dy) / l2))
-        px, py = self.x1 + t * dx, self.y1 + t * dy
-        return ((x - px) ** 2 + (y - py) ** 2) ** 0.5
+        pts = self.points(); best = 1e9
+        for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+            dx, dy = bx - ax, by - ay
+            l2 = dx * dx + dy * dy
+            t = 0.0 if l2 == 0 else max(0.0, min(1.0, ((x - ax) * dx + (y - ay) * dy) / l2))
+            best = min(best, ((x - ax - t * dx) ** 2 + (y - ay - t * dy) ** 2) ** 0.5)
+        return best
 
     def move(self, dx: float, dy: float) -> None:
         self.x1 += dx; self.x2 += dx; self.y1 += dy; self.y2 += dy

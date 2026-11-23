@@ -81,3 +81,29 @@ def test_group_ui_flow():
     assert w.grouplist.count() == 1
     w.preview.set_selection([]); w.preview.select_group("Lati")
     assert w.preview.selection == ["Fixture 1", "Fixture 3"]
+
+
+def test_curved_shape_and_handles():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+    from showsuite.light.engine import LightEngine
+    from showsuite.ui.preview import PreviewWidget
+    arc = StageShape("truss", 0.1, 0.8, 0.9, 0.8, bulge=-0.5)   # bulge negativo = arco verso l alto
+    pts = arc.points(); assert pts[0] == (0.1, 0.8) and pts[-1] == pytest.approx((0.9, 0.8))
+    mid = arc.points(2)[1]; assert mid[0] == pytest.approx(0.5) and mid[1] == pytest.approx(0.6)
+    assert arc.distance(*mid) < 1e-9 and arc.distance(0.5, 0.8) == pytest.approx(0.2, abs=0.01)
+    app = QApplication.instance() or QApplication([])
+    e = LightEngine(); e.project.shapes.append(arc)
+    w = PreviewWidget(e); w.resize(1000, 500); w.show(); w.set_edit_mode(True); w.sel_shape = arc
+    # trascina la maniglia centrale verso il basso: la curva si appiattisce e poi si inverte
+    m = w._handles(arc)[2]
+    start = QPointF(m[0] * 1000, m[1] * 500).toPoint()
+    QTest.mousePress(w, Qt.LeftButton, pos=start); QTest.mouseMove(w, QPointF(500, 400).toPoint())
+    QTest.mouseRelease(w, Qt.LeftButton, pos=QPointF(500, 400).toPoint())
+    assert abs(arc.bulge) < 0.01
+    e1 = w._handles(arc)[0]; QTest.mousePress(w, Qt.LeftButton, pos=QPointF(e1[0] * 1000, e1[1] * 500).toPoint())
+    QTest.mouseMove(w, QPointF(50, 300).toPoint()); QTest.mouseRelease(w, Qt.LeftButton, pos=QPointF(50, 300).toPoint())
+    assert arc.x1 == pytest.approx(0.05) and arc.y1 == pytest.approx(0.6)
+    w.grab()

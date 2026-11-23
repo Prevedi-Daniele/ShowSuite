@@ -33,6 +33,7 @@ class PreviewWidget(QWidget):
         self.tool: str | None = None          # "truss" | "line" | "text" in modifica
         self.sel_shape: StageShape | None = None
         self._shape_new: StageShape | None = None
+        self._handle: int | None = None
         self._bg_cache: tuple[bytes, QPixmap] | None = None
         self.setMinimumSize(420, 300)
         self.setFocusPolicy(Qt.StrongFocus)
@@ -106,21 +107,42 @@ class PreviewWidget(QWidget):
                 p.drawText(QPointF(sh.x1 * W, sh.y1 * H), sh.text or "Testo")
                 f.setPointSize(10); f.setBold(False); p.setFont(f)
                 continue
-            a, b = QPointF(sh.x1 * W, sh.y1 * H), QPointF(sh.x2 * W, sh.y2 * H)
+            pts = [QPointF(x * W, y * H) for x, y in sh.points()]
             if sh.kind == "line":
-                p.setPen(QPen(col, 3)); p.drawLine(a, b); continue
-            # traliccio: due correnti paralleli con diagonali
-            d = b - a; L = math.hypot(d.x(), d.y())
-            if L < 1:
-                continue
-            n = QPointF(-d.y() / L, d.x() / L) * 6
-            p.setPen(QPen(col, 2))
-            p.drawLine(a + n, b + n); p.drawLine(a - n, b - n)
-            steps = max(1, int(L // 14)); p.setPen(QPen(col, 1))
-            for i in range(steps):
-                t0, t1 = i / steps, (i + 1) / steps
-                p0, p1 = a + d * t0, a + d * t1
-                p.drawLine(p0 + (n if i % 2 == 0 else -n), p1 + (-n if i % 2 == 0 else n))
+                p.setPen(QPen(col, 3))
+                for u, v in zip(pts, pts[1:]):
+                    p.drawLine(u, v)
+            else:   # traliccio: due correnti paralleli con diagonali
+                offs = []
+                for i, q in enumerate(pts):
+                    u, v = pts[max(0, i - 1)], pts[min(len(pts) - 1, i + 1)]
+                    d = v - u; L = math.hypot(d.x(), d.y()) or 1.0
+                    offs.append(QPointF(-d.y() / L, d.x() / L) * 6)
+                p.setPen(QPen(col, 2))
+                for sign in (1, -1):
+                    for i in range(len(pts) - 1):
+                        p.drawLine(pts[i] + offs[i] * sign, pts[i + 1] + offs[i + 1] * sign)
+                p.setPen(QPen(col, 1))
+                n = len(pts) - 1; step = max(1, n // max(1, int(sum(math.hypot((v - u).x(), (v - u).y()) for u, v in zip(pts, pts[1:])) // 14)))
+                k = 0
+                for i in range(0, n, step):
+                    j = min(n, i + step); sg = 1 if k % 2 == 0 else -1
+                    p.drawLine(pts[i] + offs[i] * sg, pts[j] - offs[j] * sg); k += 1
+            if sh is self.sel_shape and self.edit_mode:
+                p.setPen(QPen(QColor(ACCENT), 2)); p.setBrush(QColor("#fff"))
+                for hx, hy in self._handles(sh):
+                    p.drawEllipse(QPointF(hx * W, hy * H), 5, 5)
+                p.setBrush(Qt.NoBrush)
+
+    def _handles(self, sh: StageShape) -> list[tuple[float, float]]:
+        mid = sh.points(2)[1] if sh.bulge else ((sh.x1 + sh.x2) / 2, (sh.y1 + sh.y2) / 2)
+        return [(sh.x1, sh.y1), (sh.x2, sh.y2), mid]       # inizio, fine, curvatura
+
+    def _handle_at(self, sh: StageShape, pos: QPointF) -> int | None:
+        for i, (hx, hy) in enumerate(self._handles(sh)):
+            if abs(hx * self.width() - pos.x()) < 9 and abs(hy * self.height() - pos.y()) < 9:
+                return i
+        return None
 
     def _shape_at(self, pos: QPointF) -> StageShape | None:
         if not self.width() or not self.height():
@@ -209,6 +231,10 @@ class PreviewWidget(QWidget):
                     self.update(); return
                 self._shape_new = StageShape(self.tool, x, y, x, y)
                 self._drag_from = pos; return
+            if self.sel_shape and self.sel_shape.kind != "text":
+                h = self._handle_at(self.sel_shape, pos)
+                if h is not None:
+                    self._handle = h; self._drag_from = pos; return
             hit = self._shape_at(pos)
             self.sel_shape = hit
             if hit:
@@ -237,6 +263,17 @@ class PreviewWidget(QWidget):
         pos = e.position()
         if self._shape_new is not None:
             self._shape_new.x2, self._shape_new.y2 = pos.x() / self.width(), pos.y() / self.height()
+        elif getattr(self, "_handle", None) is not None and self.sel_shape:
+            x, y = pos.x() / self.width(), pos.y() / self.height(); sh = self.sel_shape
+            if self._handle == 0:
+                sh.x1, sh.y1 = x, y
+            elif self._handle == 1:
+                sh.x2, sh.y2 = x, y
+            else:   # il punto di mezzo della curva segue il mouse (mid = m + 0.5*n*bulge)
+                mx, my = (sh.x1 + sh.x2) / 2, (sh.y1 + sh.y2) / 2
+                dx, dy = sh.x2 - sh.x1, sh.y2 - sh.y1; l2 = dx * dx + dy * dy
+                if l2 > 0:
+                    sh.bulge = max(-3.0, min(3.0, 2 * (-(x - mx) * dy + (y - my) * dx) / l2))
         elif getattr(self, "_shape_drag", None) and self.sel_shape:
             last = self._shape_drag[0]
             self.sel_shape.move((pos.x() - last.x()) / self.width(), (pos.y() - last.y()) / self.height())
@@ -256,7 +293,7 @@ class PreviewWidget(QWidget):
             sh = self._shape_new; self._shape_new = None
             if abs(sh.x2 - sh.x1) + abs(sh.y2 - sh.y1) > 0.01:
                 self.engine.project.shapes.append(sh); self.sel_shape = sh
-        self._shape_drag = None
+        self._shape_drag = None; self._handle = None
         if self._rubber is not None:
             inside = [f.name for f in self.engine.project.patch.fixtures
                       if self._rubber.contains(self._pos(f))]
