@@ -65,3 +65,18 @@ def test_pattern_editor_and_view(monkeypatch):
     monkeypatch.setattr(QInputDialog, "getText", staticmethod(lambda *a, **k: ("Fuoco", True)))
     ev.make_button(); c = w.engine.project.cues[-1]; assert c.name == "Fuoco" and c.pattern_fx.pattern == "fire" and c.color_fx is None
     ed.grab(); w.close()
+
+
+def test_path_pad_and_template_in_editor():
+    import os; os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from showsuite.ui.effect_editor import PositionEffectEditor
+    ed = PositionEffectEditor(); ed.pick("Path"); ed.pad.resize(200, 200)
+    for pt in ((50, 50), (150, 50), (100, 150)):
+        QTest.mouseClick(ed.pad, Qt.LeftButton, pos=pt.__class__(*pt) if False else __import__("PySide6.QtCore", fromlist=["QPoint"]).QPoint(*pt))
+    assert len(ed.effect.path) == 3
+    ed.tpl.setCurrentIndex(1); ed._template(1)
+    assert ed.effect.pattern == "Flower" and ed.effect.duration == 12.0

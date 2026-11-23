@@ -44,3 +44,20 @@ def test_editor_smoke():
     ed.icons["Bow Tie"].click(); ed.toff.setValue(40)
     assert ed.effect.pattern == "Bow Tie" and ed.effect.time_offset == 0.4 and len(got) >= 2
     ed.resize(900, 300); ed.grab()
+
+
+def test_movement_path_and_reverse_and_templates():
+    import pytest
+    from showsuite.light.posfx import POSITION_LIBRARY, PositionEffect, position_template
+    e = PositionEffect("Path", 4.0, 0.0, path=[(-1, 0), (0, 1), (1, 0), (0, -1)], smooth=False)
+    assert e.point(0, 0, 1) == pytest.approx((-1, 0)) and e.point(1.0, 0, 1) == pytest.approx((0, 1))
+    assert PositionEffect("Path", 4.0, 0.0, path=e.path, smooth=False, reverse=True).point(1.0, 0, 1) == pytest.approx((0, -1))
+    s = PositionEffect("Path", 4.0, 0.0, path=e.path, smooth=True)
+    for t in (0.3, 1.7, 3.9):
+        x, y = s.point(t, 0, 1); assert -1 <= x <= 1 and -1 <= y <= 1
+    assert PositionEffect("Path", 1.0, path=[]).point(0.5) == (0.0, 0.0)
+    t = position_template("Slow Circle"); t.size = 0.1; assert POSITION_LIBRARY["Slow Circle"].size == 0.5
+    from showsuite.light import project as pj
+    from showsuite.light.live import LiveCue
+    p = pj.Project("P"); p.cues = [LiveCue("m", [], position_fx=e)]
+    q = pj.loads(pj.dumps(p)); assert [tuple(x) for x in q.cues[0].position_fx.path] == [(-1, 0), (0, 1), (1, 0), (0, -1)]
