@@ -573,6 +573,8 @@ class MainWindow(QMainWindow):
         m = self.menuBar().addMenu("File")
         act(m, "Nuovo", self.new, "Ctrl+N"); act(m, "Apri…", self.open, "Ctrl+O")
         act(m, "Salva", self.save, "Ctrl+S"); act(m, "Salva con nome…", self.save_as)
+        act(m, "Chiudi progetto", self.new, "Ctrl+W")
+        self.recent_menu = m.addMenu("Apri recente"); self.recent_menu.aboutToShow.connect(self._fill_recent)
         ed = self.menuBar().addMenu("Modifica")
         self.act_undo = act(ed, "Annulla", self.undo, "Ctrl+Z"); self.act_redo = act(ed, "Ripristina", self.redo, "Ctrl+Shift+Z")
         ed.addSeparator()
@@ -851,15 +853,32 @@ class MainWindow(QMainWindow):
     def open(self):
         f, _ = QFileDialog.getOpenFileName(self, "Apri progetto", "", "ShowSuite Light (*.showsuite-light)")
         if f:
-            try:
-                self._load_into_engine(pj.load(f)); self.path = f
-            except Exception as e:
-                QMessageBox.critical(self, "Apri", str(e))
+            self.open_path(f)
+
+    def open_path(self, f: str) -> bool:
+        from ..light import recents
+        try:
+            self._load_into_engine(pj.load(f)); self.path = f; recents.add(f); return True
+        except Exception as e:
+            QMessageBox.critical(self, "Apri", str(e)); return False
+
+    def _fill_recent(self):
+        import os
+        from ..light import recents
+        self.recent_menu.clear()
+        items = [p for p in recents.load() if os.path.exists(p)]
+        for p in items:
+            self.recent_menu.addAction(os.path.basename(p), lambda p=p: self.open_path(p))
+        if not items:
+            self.recent_menu.addAction("(nessuno)").setEnabled(False)
+        else:
+            self.recent_menu.addSeparator(); self.recent_menu.addAction("Svuota elenco", recents.clear)
 
     def save(self):
         if not self.path:
             return self.save_as()
         pj.save(self.engine.project, self.path)
+        from ..light import recents; recents.add(self.path)
 
     def save_as(self):
         f, _ = QFileDialog.getSaveFileName(self, "Salva progetto", "", "ShowSuite Light (*.showsuite-light)")
@@ -867,6 +886,7 @@ class MainWindow(QMainWindow):
             if not f.endswith(".showsuite-light"):
                 f += ".showsuite-light"
             self.path = f; pj.save(self.engine.project, f)
+            from ..light import recents; recents.add(f)
 
     def closeEvent(self, e):
         self.engine.stop_output(); self.midi.close()
