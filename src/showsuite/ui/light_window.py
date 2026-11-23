@@ -7,7 +7,7 @@ from PySide6.QtCore import QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QBrush, QColor, QPainter, QPen
 from PySide6.QtWidgets import (QMenu, QTreeWidget, QTreeWidgetItem, QStackedWidget, QToolBar, QAbstractItemView, QApplication, QComboBox, QDialog, QDialogButtonBox,
                                QCheckBox, QDockWidget, QDoubleSpinBox, QFileDialog, QFormLayout, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-                               QMainWindow, QMessageBox, QPushButton, QScrollArea, QSlider,
+                               QInputDialog, QMainWindow, QMessageBox, QPushButton, QScrollArea, QSlider,
                                QSpinBox, QSplitter, QVBoxLayout, QWidget)
 
 from ..light import project as pj
@@ -540,6 +540,13 @@ class MainWindow(QMainWindow):
         self.palette_tree.refresh()
 
     def set_locked(self, on: bool):
+        from ..light import settings as S
+        cfg = S.load()
+        if not on and cfg["lock_password"]:
+            pw, ok = QInputDialog.getText(self, "Sblocca", "Password:", QLineEdit.Password)
+            if not ok or not S.check_pw(cfg, pw):
+                self.bar.lock.blockSignals(True); self.bar.lock.setChecked(True); self.bar.lock.blockSignals(False)
+                return
         self.design.setEnabled(not on); self.preview.setEnabled(not on)
 
     def _update_tint(self):
@@ -548,7 +555,8 @@ class MainWindow(QMainWindow):
         for f in fx:
             c = self.engine.fixture_color(f); r += c[0]; g += c[1]; b += c[2]
         n = max(1, len(fx)); base = (14, 15, 18)
-        a = 0.22   # intensità del riflesso
+        from ..light import settings as S
+        a = 0.22 if S.load()["adaptive_background"] else 0.0   # intensità del riflesso
         self.preview.tint = tuple(int(base[i] + (c / n - base[i]) * a) for i, c in enumerate((r, g, b)))
 
     def show_view(self, i: int) -> None:
@@ -574,6 +582,7 @@ class MainWindow(QMainWindow):
         act(m, "Nuovo", self.new, "Ctrl+N"); act(m, "Apri…", self.open, "Ctrl+O")
         act(m, "Salva", self.save, "Ctrl+S"); act(m, "Salva con nome…", self.save_as)
         act(m, "Chiudi progetto", self.new, "Ctrl+W")
+        act(m, "Impostazioni…", lambda: __import__("showsuite.ui.settings_dialog", fromlist=["x"]).SettingsDialog(self).exec(), "Ctrl+,")
         self.recent_menu = m.addMenu("Apri recente"); self.recent_menu.aboutToShow.connect(self._fill_recent)
         ed = self.menuBar().addMenu("Modifica")
         self.act_undo = act(ed, "Annulla", self.undo, "Ctrl+Z"); self.act_redo = act(ed, "Ripristina", self.redo, "Ctrl+Shift+Z")
@@ -789,7 +798,7 @@ class MainWindow(QMainWindow):
 
     # --- file ---
     def _load_into_engine(self, proj):
-        self.undo_stack = UndoStack(pj.dumps(proj))
+        self.undo_stack = UndoStack(pj.dumps(proj)); self._saved_bytes = self.undo_stack.states[0]
         self.engine.stop_output(); self.out_btn.setChecked(False)
         self.engine.project = proj
         self.midi.mappings = proj.midi_mappings
@@ -877,7 +886,7 @@ class MainWindow(QMainWindow):
     def save(self):
         if not self.path:
             return self.save_as()
-        pj.save(self.engine.project, self.path)
+        pj.save(self.engine.project, self.path); self._saved_bytes = pj.dumps(self.engine.project)
         from ..light import recents; recents.add(self.path)
 
     def save_as(self):
@@ -885,10 +894,22 @@ class MainWindow(QMainWindow):
         if f:
             if not f.endswith(".showsuite-light"):
                 f += ".showsuite-light"
-            self.path = f; pj.save(self.engine.project, f)
+            self.path = f; pj.save(self.engine.project, f); self._saved_bytes = pj.dumps(self.engine.project)
             from ..light import recents; recents.add(f)
 
     def closeEvent(self, e):
+        from ..light import settings as S
+        mode = S.load()["on_quit"]
+        if self.path and mode != "discard" and pj.dumps(self.engine.project) != self._saved_bytes:
+            if mode == "ask":
+                r = QMessageBox.question(self, "Chiudi", "Salvare le modifiche?",
+                                         QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel)
+                if r == QMessageBox.Cancel:
+                    e.ignore(); return
+                if r == QMessageBox.Save:
+                    self.save()
+            else:
+                self.save()
         self.engine.stop_output(); self.midi.close()
         if self.osc:
             self.osc.stop()
