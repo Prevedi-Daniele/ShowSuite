@@ -116,3 +116,15 @@ def test_shift_letter_selects_property():
     w = PreviewWidget(LightEngine(p)); got = []; w.property_key.connect(got.append)
     w.set_selection(["F"]); QTest.keyClick(w, Qt.Key_C, Qt.ShiftModifier)
     assert got == ["C"]
+
+
+def test_fog_speed_custom_properties():
+    from showsuite.light import project as pj, properties as P
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.fixtures import ChannelDef, FixtureInstance, FixtureProfile
+    prof = FixtureProfile("A", "Fogger", "3", (ChannelDef("Fog", kind="fog"), ChannelDef("Spd", kind="speed"), ChannelDef("Boh")))
+    assert P.available_properties(prof) == ["fog", "speed", "custom"]
+    p = pj.Project("F"); p.patch.add(FixtureInstance("G", prof, 1, 1)); e = LightEngine(p)
+    P.set_simple(e, ["G"], "fog", 1.0); P.set_channel(e, ["G"], "Boh", 0.5)
+    assert e.values["G"] == {"Fog": 255, "Boh": 128}
+    assert P.property_state(e, ["G"], "custom") == "all"

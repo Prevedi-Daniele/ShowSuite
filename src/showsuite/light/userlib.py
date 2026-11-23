@@ -10,7 +10,7 @@ from .fixtures import ChannelDef, FixtureProfile
 from .project import _profile_from_dict, _profile_to_dict
 
 KINDS = ("", "intensity", "red", "green", "blue", "white", "amber", "uv", "pan", "tilt", "zoom", "focus", "iris",
-         "prism", "frost", "shutter", "color_wheel", "gobo_wheel")
+         "prism", "frost", "shutter", "color_wheel", "gobo_wheel", "fog", "speed")
 
 
 def _dir() -> Path:

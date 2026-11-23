@@ -89,12 +89,14 @@ def clear_override(engine: LightEngine, fixtures: list[str], channel: str | None
 
 # ---------------------------------------------------------------- proprietà del Design view
 PROPERTY_ORDER = ("dimmer", "color", "color_wheel", "gobo_wheel", "shutter", "position",
-                  "zoom", "focus", "iris", "prism", "frost")
+                  "zoom", "focus", "iris", "prism", "frost", "fog", "speed", "custom")
 SHORTCUTS = {"dimmer": "D", "color": "C", "color_wheel": "C", "gobo_wheel": "G", "position": "P",
-             "shutter": "S", "prism": "M", "focus": "F", "zoom": "Z", "iris": "I", "frost": "R"}
+             "shutter": "S", "prism": "M", "focus": "F", "zoom": "Z", "iris": "I", "frost": "R",
+             "fog": "H", "speed": "V", "custom": "X"}
 PROPERTY_TITLES = {"dimmer": "Dimmer", "color": "Color", "color_wheel": "Color Wheel",
                    "gobo_wheel": "Gobo Wheel", "shutter": "Shutter/Strobe", "position": "Position",
-                   "zoom": "Zoom", "focus": "Focus", "iris": "Iris", "prism": "Prism", "frost": "Frost"}
+                   "zoom": "Zoom", "focus": "Focus", "iris": "Iris", "prism": "Prism", "frost": "Frost",
+                   "fog": "Fog", "speed": "Movement Speed", "custom": "Custom"}
 _COLOR_KINDS = ("red", "green", "blue", "white", "amber", "uv")
 
 
@@ -108,6 +110,8 @@ def property_channels(profile, prop: str) -> list[str]:
         return by(*_COLOR_KINDS)
     if prop == "position":
         return by("pan", "tilt")
+    if prop == "custom":
+        return by("")
     return by(prop) if prop != "color_wheel" else by("color_wheel")
 
 
@@ -121,6 +125,8 @@ def available_properties(profile) -> list[str]:
             ok = all(profile.channel_of_kind(k) for k in COLOR_KINDS)
         elif prop == "position":
             ok = profile.channel_of_kind("pan") is not None or profile.channel_of_kind("tilt") is not None
+        elif prop == "custom":
+            ok = bool(property_channels(profile, "custom"))
         else:
             ok = profile.channel_of_kind(prop) is not None
         if ok:
@@ -229,3 +235,13 @@ def paste_properties(engine: LightEngine, fixtures: list[str], data: dict[str, i
 def reset_to_default(engine: LightEngine, fixtures: list[str]) -> None:
     for f in fixtures:
         engine.values.pop(f, None)
+
+
+def set_channel(engine: LightEngine, fixtures: list[str], channel: str, value: float) -> int:
+    """Imposta un canale per nome (proprietà custom): value 0-1."""
+    n = 0
+    for f in fixtures:
+        c = next((c for c in engine.project.patch.find(f).profile.channels if c.name == channel), None)
+        if c:
+            engine.set_value(f, c.name, round(max(0, min(1, value)) * (65535 if c.fine else 255))); n += 1
+    return n

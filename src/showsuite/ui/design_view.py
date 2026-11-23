@@ -81,7 +81,7 @@ class Panel(QFrame):
             more = QPushButton("Altro…"); more.clicked.connect(
                 lambda: (lambda col: col.isValid() and self._rgb(col))(QColorDialog.getColor(parent=self)))
             self.body.addWidget(more)
-        elif p in ("color_wheel", "gobo_wheel"):
+        elif p in ("color_wheel", "gobo_wheel", "custom"):
             self.slots = QVBoxLayout(); self.body.addLayout(self.slots)
         elif p == "shutter":
             row = QHBoxLayout()
@@ -109,12 +109,18 @@ class Panel(QFrame):
         P.set_shutter(self.engine, self.names, st, speed); self.touched()
 
     def fill_slots(self, profile) -> None:
-        if self.prop not in ("color_wheel", "gobo_wheel"):
+        if self.prop not in ("color_wheel", "gobo_wheel", "custom"):
             return
         while self.slots.count():
             w = self.slots.takeAt(0).widget()
             if w:
                 w.setParent(None)
+        if self.prop == "custom":
+            for name in P.property_channels(profile, "custom"):
+                lab = QLabel(name); sl = QSlider(Qt.Horizontal); sl.setRange(0, 1000)
+                sl.valueChanged.connect(lambda v, name=name: (P.set_channel(self.engine, self.names, name, v / 1000), self.touched()))
+                self.slots.addWidget(lab); self.slots.addWidget(sl)
+            return
         for i, (_v, label) in enumerate(P.wheel_slots(profile, self.prop)):
             b = QPushButton(label)
             b.clicked.connect(lambda _=0, i=i: (P.set_slot(self.engine, self.names, self.prop, i), self.touched()))

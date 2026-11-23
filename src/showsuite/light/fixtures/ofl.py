@@ -29,7 +29,8 @@ def _default(value, fine: bool) -> int:
 
 
 _SIMPLE = {"Pan": "pan", "Tilt": "tilt", "Zoom": "zoom", "Focus": "focus", "Iris": "iris",
-           "Prism": "prism", "Frost": "frost"}
+           "Prism": "prism", "Frost": "frost", "Fog": "fog", "FogOutput": "fog",
+           "PanTiltSpeed": "speed", "Speed": "speed"}
 
 
 def _caps_list(spec: dict) -> list[dict]:
