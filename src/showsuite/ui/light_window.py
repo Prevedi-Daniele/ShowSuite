@@ -23,6 +23,7 @@ from .palette_tree import PaletteTree
 from .patch_window import PatchWindow
 from .monitor_windows import ControlLogWindow, DmxMonitor
 from ..light.control.log import ControlLog
+from ..light.undo import UndoStack
 from .live_view import LiveView
 from .preview import PreviewWidget
 from ..light.effects import WAVES, Effect
@@ -484,6 +485,9 @@ class MainWindow(QMainWindow):
         self.dmxin: DmxInput | None = None
         self.midi.clock = MidiClockSync(self.engine.beat)
         self.control_log = ControlLog(); self.midi.log = self.control_log
+        self.undo_stack = UndoStack(pj.dumps(self.engine.project))
+        self._undo_timer = QTimer(self); self._undo_timer.setInterval(400); self._undo_timer.timeout.connect(self.snapshot)
+        self._undo_timer.start()
         self._seq_steps: list[Preset] = []
         self._seq_fixtures: list[str] = []
         self.preview = PreviewWidget(self.engine)
@@ -565,10 +569,12 @@ class MainWindow(QMainWindow):
         def act(menu, text, fn, key=None):
             a = QAction(text, self); a.triggered.connect(fn)
             if key: a.setShortcut(key)
-            menu.addAction(a)
+            menu.addAction(a); return a
         m = self.menuBar().addMenu("File")
         act(m, "Nuovo", self.new, "Ctrl+N"); act(m, "Apri…", self.open, "Ctrl+O")
         act(m, "Salva", self.save, "Ctrl+S"); act(m, "Salva con nome…", self.save_as)
+        ed = self.menuBar().addMenu("Modifica")
+        self.act_undo = act(ed, "Annulla", self.undo, "Ctrl+Z"); self.act_redo = act(ed, "Ripristina", self.redo, "Ctrl+Shift+Z")
         v = self.menuBar().addMenu("Vista")
         act(v, "Design", lambda: self.show_view(0), "Ctrl+D"); act(v, "Live", lambda: self.show_view(1), "Ctrl+L"); act(v, "Effetti", lambda: self.show_view(2), "Ctrl+E")
         p = self.menuBar().addMenu("Patch")
@@ -778,6 +784,7 @@ class MainWindow(QMainWindow):
 
     # --- file ---
     def _load_into_engine(self, proj):
+        self.undo_stack = UndoStack(pj.dumps(proj))
         self.engine.stop_output(); self.out_btn.setChecked(False)
         self.engine.project = proj
         self.midi.mappings = proj.midi_mappings
@@ -787,6 +794,37 @@ class MainWindow(QMainWindow):
         self.preview.set_selection([], emit=False); self.faders.show_fixtures([])
         self._retitle(); self._refresh_list(); self._refresh_palette()
         self.engine.live.active.clear(); self.live_view.rebuild()
+
+    # --- annulla / ripristina
+    def snapshot(self) -> None:
+        """Registra lo stato del progetto se è cambiato (chiamato dal timer, non durante un trascinamento)."""
+        from PySide6.QtWidgets import QApplication
+        if QApplication.mouseButtons() != Qt.NoButton:
+            return
+        self.undo_stack.record(pj.dumps(self.engine.project))
+
+    def _restore(self, data: bytes | None) -> None:
+        if data is None:
+            return
+        proj = pj.loads(data)
+        sel = list(self.preview.selection)
+        self.engine.project = proj
+        self.midi.mappings = proj.midi_mappings
+        if self.dmxin:
+            self.dmxin.mappings = proj.dmx_mappings
+        valid = {f.name for f in proj.patch.fixtures}
+        for n in list(self.engine.values):
+            if n not in valid:
+                self.engine.values.pop(n)
+        self.engine.live.active.clear()
+        self.preview.set_selection([n for n in sel if n in valid])
+        self._retitle(); self._refresh_list(); self._refresh_palette(); self.live_view.rebuild(); self.preview.update()
+
+    def undo(self) -> None:
+        self.snapshot(); self._restore(self.undo_stack.undo())
+
+    def redo(self) -> None:
+        self._restore(self.undo_stack.redo())
 
     def new(self):
         self.path = None; self._load_into_engine(pj.Project())

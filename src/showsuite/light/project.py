@@ -106,7 +106,13 @@ def _profile_from_dict(d: dict) -> FixtureProfile:
                                 for c in d["channels"]))
 
 
-def save(project: Project, path: str) -> None:
+def _w(z: zipfile.ZipFile, name: str, data) -> None:
+    """Scrive con data fissa: due salvataggi identici producono byte identici (serve all'annulla)."""
+    info = zipfile.ZipInfo(name, date_time=(2020, 1, 1, 0, 0, 0)); info.compress_type = zipfile.ZIP_DEFLATED
+    z.writestr(info, data)
+
+
+def save(project: Project, path) -> None:
     profiles = {}
     fixtures = []
     for f in project.patch.fixtures:
@@ -130,14 +136,24 @@ def save(project: Project, path: str) -> None:
            "dmx_mappings": [vars(m) for m in project.dmx_mappings],
            "shapes": [vars(sh) for sh in project.shapes], "groups": [vars(g) for g in project.groups], "has_background": project.background is not None}
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("project.json", json.dumps(doc, indent=2, ensure_ascii=False))
+        _w(z, "project.json", json.dumps(doc, indent=2, ensure_ascii=False))
         if project.background is not None:
-            z.writestr("assets/background", project.background)
+            _w(z, "assets/background", project.background)
         for pid, prof in profiles.items():
-            z.writestr(f"profiles/{pid}.json", json.dumps(_profile_to_dict(prof), indent=2))
+            _w(z, f"profiles/{pid}.json", json.dumps(_profile_to_dict(prof), indent=2))
 
 
-def load(path: str) -> Project:
+def dumps(project: Project) -> bytes:
+    import io
+    buf = io.BytesIO(); save(project, buf); return buf.getvalue()
+
+
+def loads(data: bytes) -> Project:
+    import io
+    return load(io.BytesIO(data))
+
+
+def load(path) -> Project:
     with zipfile.ZipFile(path) as z:
         doc = json.loads(z.read("project.json"))
         ver = doc.get("schema_version")
