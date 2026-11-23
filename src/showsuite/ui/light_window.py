@@ -255,6 +255,8 @@ class ControlDialog(QDialog):
         self.osc_btn = QPushButton("Ferma OSC" if win.osc else "Avvia OSC"); self.osc_btn.clicked.connect(self._toggle_osc)
         orow.addWidget(QLabel("OSC porta")); orow.addWidget(self.osc_port); orow.addWidget(self.osc_btn); orow.addStretch()
         v.addLayout(orow)
+        self.os2l_btn = QPushButton("Ferma OS2L" if getattr(win, "os2l", None) else "Avvia OS2L (beat da VirtualDJ ecc.)")
+        self.os2l_btn.clicked.connect(self._toggle_os2l); v.addWidget(self.os2l_btn)
         # MIDI
         mrow = QHBoxLayout()
         self.ports = QComboBox(); self.ports.addItems(MidiController.list_ports())
@@ -313,6 +315,18 @@ class ControlDialog(QDialog):
             self.arg2.addItems([c.name for c in self.win.engine.project.patch.find(name).profile.channels])
         except KeyError:
             pass
+
+    def _toggle_os2l(self):
+        from ..light.control.os2l import Os2lServer
+        w = self.win
+        if getattr(w, "os2l", None):
+            w.os2l.stop(); w.os2l = None
+        else:
+            try:
+                w.os2l = Os2lServer(w.engine, w.runner); w.os2l.start()
+            except OSError as e:
+                w.os2l = None; QMessageBox.warning(self, "OS2L", f"Impossibile aprire la porta: {e}")
+        self.os2l_btn.setText("Ferma OS2L" if w.os2l else "Avvia OS2L (beat da VirtualDJ ecc.)")
 
     def _open_midi_out(self, i: int):
         try:
@@ -945,7 +959,9 @@ class MainWindow(QMainWindow):
                     self.save()
             else:
                 self.save()
-        self.engine.stop_output(); self.midi.close()
+        self.engine.stop_output(); self.midi.close(); self.midi.close_output()
+        if getattr(self, "os2l", None):
+            self.os2l.stop()
         if self.osc:
             self.osc.stop()
         if self.dmxin:
