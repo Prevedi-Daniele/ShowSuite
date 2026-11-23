@@ -132,3 +132,22 @@ def test_monitor_windows_smoke():
     log = ControlLog(); log.add("midi", "X", "Channel 0: CC 7 (1)", "ok")
     w = ControlLogWindow(log); assert w.table.rowCount() == 1
     mon.close(); w.close(); mon.deleteLater(); w.deleteLater()
+
+
+def test_midi_shift_and_inverted(tmp_path):
+    from showsuite.light import project as pj
+    e, r = setup()
+    m = MidiController(r)
+    m.learn("shift"); m.handle("note_on", 0, 10, 127)            # tasto Shift
+    m.handle("note_off", 0, 10, 0)
+    m.learn("master"); m.handle("cc", 0, 1, 5)                   # senza shift
+    m.handle("note_on", 0, 10, 127)                              # tieni Shift
+    m.learn("blackout"); m.handle("cc", 0, 1, 5)                 # stesso CC ma con shift
+    assert [(x.action, x.shift) for x in m.mappings if x.key() == ("cc", 0, 1)] == [("master", False), ("blackout", True)]
+    m.handle("cc", 0, 1, 127); assert e.blackout is True and e.grand_master == 1.0   # con shift: solo blackout
+    m.handle("note_off", 0, 10, 0)
+    m.handle("cc", 0, 1, 0); assert e.grand_master == 0.0                            # rilasciato: master
+    mm = next(x for x in m.mappings if x.action == "master"); mm.inverted = True
+    m.handle("cc", 0, 1, 0); assert e.grand_master == 1.0
+    p = pj.Project("M"); p.midi_mappings = list(m.mappings)
+    q = pj.loads(pj.dumps(p)); assert any(x.shift for x in q.midi_mappings) and any(x.inverted for x in q.midi_mappings)

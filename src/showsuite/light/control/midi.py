@@ -17,9 +17,14 @@ class MidiMapping:
     number: int      # nota o numero CC (0-127)
     action: str
     args: dict = field(default_factory=dict)
+    shift: bool = False       # vale solo con il tasto Shift del controller premuto
+    inverted: bool = False    # fader/manopole invertiti
 
     def key(self) -> tuple:
         return (self.kind, self.channel, self.number)
+
+    def slot(self) -> tuple:
+        return (self.kind, self.channel, self.number, self.shift)
 
 
 class MidiController:
@@ -27,6 +32,7 @@ class MidiController:
         self.runner = runner
         self.mappings: list[MidiMapping] = mappings if mappings is not None else []
         self._learn: tuple[str, dict] | None = None
+        self.shift_down = False
         self.on_learned = None   # callback(MidiMapping)
         self.errors: list[str] = []
         self._port = None
@@ -55,8 +61,10 @@ class MidiController:
         if self._learn and (k == "cc" or (kind == "note_on" and value > 0)):
             action, args = self._learn
             self._learn = None
-            self.mappings[:] = [m for m in self.mappings if m.key() != (k, channel, number)]  # stessa lista del progetto
-            m = MidiMapping(k, channel, number, action, args)
+            is_shift_key = any(m.action == "shift" and m.key() == (k, channel, number) for m in self.mappings)
+            sh = self.shift_down and not is_shift_key and action != "shift"
+            self.mappings[:] = [m for m in self.mappings if m.slot() != (k, channel, number, sh)]  # stessa lista del progetto
+            m = MidiMapping(k, channel, number, action, args, shift=sh)
             self.mappings.append(m)
             if self.log:
                 self.log.add("midi", self.endpoint, msg, f"Associato a «{action}»", "learn")
@@ -65,10 +73,16 @@ class MidiController:
             return
         matched = False
         for m in self.mappings:
-            if m.key() == (k, channel, number):
+            if m.key() == (k, channel, number) and m.action == "shift":
+                self.shift_down = value > 0; matched = True
+                if self.log:
+                    self.log.add("midi", self.endpoint, msg, "Shift " + ("premuto" if self.shift_down else "rilasciato"), "ok")
+                return
+        for m in self.mappings:
+            if m.key() == (k, channel, number) and m.shift == self.shift_down:
                 matched = True
                 try:
-                    self.runner.run(m.action, m.args, value / 127.0)
+                    self.runner.run(m.action, m.args, (127 - value) / 127.0 if m.inverted else value / 127.0)
                     if self.log:
                         self.log.add("midi", self.endpoint, msg, f"Azione eseguita: {m.action}", "ok")
                 except (ControlError, KeyError) as e:

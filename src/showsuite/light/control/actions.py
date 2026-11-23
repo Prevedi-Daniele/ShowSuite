@@ -9,6 +9,7 @@ ACTIONS = {
     "blackout": "Blackout (on/off)",
     "freeze": "Freeze (on/off)",
     "blind": "Blind (on/off)",
+    "shift": "Tasto Shift del controller (le altre mappature con Shift valgono solo mentre è premuto)",
     "fixture": "Canale di un fixture (args: fixture, channel; continuo)",
 }
 
@@ -33,6 +34,8 @@ class ActionRunner:
                     e.live.trigger(cue)
             else:
                 e.live.trigger(cue) if on else e.live.release(cue)
+        elif action == "shift":
+            pass                       # gestito da MidiController (stato del tasto)
         elif action == "master":
             e.grand_master = value
         elif action == "bpm":
