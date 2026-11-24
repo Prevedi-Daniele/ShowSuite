@@ -151,3 +151,32 @@ def test_midi_shift_and_inverted(tmp_path):
     m.handle("cc", 0, 1, 0); assert e.grand_master == 1.0
     p = pj.Project("M"); p.midi_mappings = list(m.mappings)
     q = pj.loads(pj.dumps(p)); assert any(x.shift for x in q.midi_mappings) and any(x.inverted for x in q.midi_mappings)
+
+
+def test_lightkey_style_osc_addresses():
+    from showsuite.light import project as pj
+    from showsuite.light.control.osc import dispatch, match_names
+    from showsuite.light.live import CueList, CueListStep, LiveButton, LivePage
+    e, r = setup()
+    assert match_names("Par_{1,3}", ["Par 1", "Par 2", "Par 3"]) == ["Par 1", "Par 3"]
+    assert match_names("P?r_*", ["Par 1", "Led 1"]) == ["Par 1"]
+    cue = e.project.cues[0].name
+    e.project.pages = [LivePage("Main Page", [LiveButton(cue)], cuelist=CueList("CL", [CueListStep(cue)]))]
+    base = f"/live/Main_Page/cue/{cue.replace(' ', '_')}"
+    dispatch(r, base + "/activate", []); assert cue in e.live.active
+    dispatch(r, base + "/deactivate", []); assert e.live.active[cue]["releasing"]
+    dispatch(r, base + "/toggle", []); assert not e.live.active[cue]["releasing"]
+    sel = []; r.on_select_page = sel.append
+    dispatch(r, "/live/Main_Page/select", []); assert sel == ["Main Page"]
+    dispatch(r, "/live/Main_Page/cuelist/start", []); assert e.live.current_step(e.project.pages[0].cuelist) == 1
+    dispatch(r, "/output/master", [0.25]); assert e.grand_master == 0.25
+    dispatch(r, "/output/freeze", [1]); assert e.freeze
+    dispatch(r, "/beat/tempo", [140.0]); assert round(e.beat.bpm) == 140
+    dispatch(r, "/beat/double", []); assert round(e.beat.bpm) == 280
+    fx = e.project.patch.fixtures[0].name.replace(" ", "_")
+    dispatch(r, f"/fixture/{fx}/overrides/dimmer", [1.0]); assert e.values
+    dispatch(r, f"/fixture/{fx}/clear", []); assert not e.values.get(e.project.patch.fixtures[0].name)
+    import pytest
+    from showsuite.light.control.actions import ControlError
+    with pytest.raises(ControlError):
+        dispatch(r, "/live/Nessuna/select", [])

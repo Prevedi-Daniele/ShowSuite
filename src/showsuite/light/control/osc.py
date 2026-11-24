@@ -93,9 +93,130 @@ def _value(args: list) -> float:
     return 1.0 if v is True else 0.0 if v is False else float(v)
 
 
+def _expand_braces(pat: str) -> list[str]:
+    """`{a,b}` -> alternative; ricorsivo."""
+    import re
+    m = re.search(r"\{([^{}]*)\}", pat)
+    if not m:
+        return [pat]
+    return [r for alt in m.group(1).split(",") for r in _expand_braces(pat[:m.start()] + alt + pat[m.end():])]
+
+
+def match_names(pattern: str, names: list[str]) -> list[str]:
+    """Pattern OSC (`? * [] {}`); nel nome gli spazi sono scritti `_`."""
+    import fnmatch
+    pats = _expand_braces(pattern)
+    return [n for n in names if any(fnmatch.fnmatchcase(n.replace(" ", "_"), p) for p in pats)]
+
+
+def _lk_value(args, default=1.0):
+    return default if not args else _value(args)
+
+
+def dispatch_lightkey(runner: ActionRunner, parts: list[str], args: list) -> bool:
+    """Indirizzi nello stile di Lightkey. Ritorna False se l'indirizzo non è di questa famiglia."""
+    e = runner.engine; head = parts[0]
+    if head == "live" and len(parts) >= 3:
+        pages = match_names(parts[1], [p.name for p in e.project.pages]) if hasattr(e, "project") else []
+        if not pages:
+            raise ControlError(f"pagina non trovata: {parts[1]}")
+        if parts[2] == "select" and runner.on_select_page:
+            runner.on_select_page(pages[0]); return True
+        if parts[2] == "cue" and len(parts) == 5:
+            cnames = []
+            for pg in e.project.pages:
+                if pg.name in pages:
+                    cnames += [b.cue for b in pg.buttons if b.kind != "text"]
+            targets = match_names(parts[3], list(dict.fromkeys(cnames)))
+            if not targets:
+                raise ControlError(f"cue non trovato: {parts[3]}")
+            for n in targets:
+                cue = runner._cue(n); op = parts[4]
+                if op == "activate":
+                    if n not in e.live.active or e.live.active[n]["releasing"]:
+                        e.live.start(cue)
+                elif op == "deactivate":
+                    e.live.release(cue)
+                elif op == "toggle":
+                    e.live.trigger(cue)
+                elif op == "intensity":
+                    e.live.set_fader(cue, _lk_value(args))
+                else:
+                    raise ControlError(f"operazione cue sconosciuta: {op}")
+            return True
+        if parts[2] == "cuelist" and len(parts) == 4:
+            pg = next((p for p in e.project.pages if p.name in pages and p.cuelist), None)
+            if pg is None:
+                raise ControlError("nessuna cuelist in questa pagina")
+            cl, op = pg.cuelist, parts[3]
+            if op in ("start", "nextCue"):
+                e.live.go(cl, pg.priority)
+            elif op == "previousCue":
+                cur = e.live.current_step(cl) or 1; n = len(cl.steps)
+                e.live.goto(cl, ((cur - 2) % n) + 1, pg.priority)
+            elif op == "stop":
+                e.live.stop_cuelist(cl)
+            elif op == "toggle":
+                e.live.stop_cuelist(cl) if e.live.current_step(cl) else e.live.go(cl, pg.priority)
+            else:
+                raise ControlError(f"operazione cuelist sconosciuta: {op}")
+            return True
+    elif head == "output" and len(parts) == 2:
+        v = _lk_value(args)
+        if parts[1] in ("blind", "freeze"):
+            runner.run(parts[1], {}, v)
+        elif parts[1] == "master":
+            runner.run("master", {}, v)
+        else:
+            raise ControlError(f"output sconosciuto: {parts[1]}")
+        return True
+    elif head == "beat" and len(parts) == 2:
+        b = e.beat
+        if parts[1] == "tap":
+            b.tap()
+        elif parts[1] == "tempo" and args:
+            b.set_bpm(float(args[0]))
+        elif parts[1] == "halve":
+            b.set_bpm(b.bpm / 2)
+        elif parts[1] == "double":
+            b.set_bpm(b.bpm * 2)
+        else:
+            raise ControlError(f"beat sconosciuto: {parts[1]}")
+        return True
+    elif head == "fixture" and len(parts) >= 3 and parts[2] in ("overrides", "clear", "select", "deselect"):
+        names = match_names(parts[1], [f.name for f in e.project.patch.fixtures])
+        if not names:
+            raise ControlError(f"fixture non trovato: {parts[1]}")
+        if parts[2] == "clear":
+            for n in names:
+                e.values.pop(n, None)
+        elif parts[2] == "overrides" and len(parts) == 4:
+            from .. import properties as P
+            prop = parts[3].replace("_", " ").lower()
+            key = {"dimmer": "dimmer", "pan": "pan", "tilt": "tilt"}.get(prop, prop)
+            v = _lk_value(args)
+            if key == "dimmer":
+                P.set_dimmer(e, names, round(v * 255))
+            elif key in ("pan", "tilt"):
+                P.set_position(e, names, **{key: v})
+            else:
+                P.set_simple(e, names, key, v)
+        elif parts[2] in ("select", "deselect") and runner.on_select_fixtures:
+            runner.on_select_fixtures(names, parts[2] == "select")
+        return True
+    elif head == "palette" and len(parts) == 4:
+        pal = next((p for p in e.project.palettes if p.name.replace(" ", "_") in (parts[1], parts[1].replace("_", " "))), None)
+        if pal is None:
+            raise ControlError(f"palette non trovata: {parts[1]}")
+        raise ControlError("palette via OSC: non ancora supportato")
+    return False
+
+
 def dispatch(runner: ActionRunner, addr: str, args: list) -> None:
     parts = [unquote(p) for p in addr.strip("/").split("/")]
     head = parts[0]
+    if dispatch_lightkey(runner, parts, args):
+        return
     if head == "cue" and len(parts) == 2:
         runner.run("cue", {"cue": parts[1]}, _value(args))
     elif head == "fixture" and len(parts) == 3:

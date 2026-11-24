@@ -133,7 +133,7 @@ class OutputsDialog(QDialog):
         v = QVBoxLayout(self)
         self.list = QListWidget(); v.addWidget(self.list)
         f = QFormLayout()
-        self.type = QComboBox(); self.type.addItems(["opendmx", "artnet", "sacn", "ola"])
+        self.type = QComboBox(); self.type.addItems(["opendmx", "enttecpro", "artnet", "sacn", "ola"])
         self.uni = QSpinBox(); self.uni.setRange(1, pj.MAX_UNIVERSES)
         self.target = QComboBox(); self.target.setEditable(True)
         self.type.currentTextChanged.connect(self._refill)
@@ -150,7 +150,7 @@ class OutputsDialog(QDialog):
 
     def _refill(self, kind):
         self.target.clear()
-        if kind == "opendmx":
+        if kind in ("opendmx", "enttecpro"):
             try:
                 from serial.tools import list_ports
                 self.target.addItems([p.device for p in list_ports.comports()])
@@ -172,9 +172,9 @@ class OutputsDialog(QDialog):
             host, _, port = (t or "127.0.0.1:9090").partition(":")
             params = {"host": host, "port": int(port or 9090)}
         else:
-            params = {"port": t} if k == "opendmx" else ({"host": t} if k == "artnet" else
+            params = {"port": t} if k in ("opendmx", "enttecpro") else ({"host": t} if k == "artnet" else
                                                           ({"unicast": t} if t else {}))
-        if k == "opendmx" and not t:
+        if k in ("opendmx", "enttecpro") and not t:
             QMessageBox.warning(self, "Uscite", "Scegli la porta seriale dell'interfaccia.")
             return
         self.engine.project.outputs.append(pj.OutputConfig(k, self.uni.value(), params))
@@ -506,11 +506,17 @@ class TransportBar(QToolBar):
 
 
 class MainWindow(QMainWindow):
+    osc_select_page = Signal(str)             # da OSC (thread di rete) -> thread UI
+    osc_select_fixtures = Signal(list, bool)
     def __init__(self):
         super().__init__()
         self.engine = LightEngine()
         self.path: str | None = None
         self.runner = ActionRunner(self.engine)
+        self.runner.on_select_page = self.osc_select_page.emit
+        self.runner.on_select_fixtures = self.osc_select_fixtures.emit
+        self.osc_select_page.connect(self._osc_select_page)
+        self.osc_select_fixtures.connect(self._osc_select_fixtures)
         self.midi = MidiController(self.runner, self.engine.project.midi_mappings)
         self.osc: OscServer | None = None
         self.dmxin: DmxInput | None = None
@@ -926,6 +932,15 @@ class MainWindow(QMainWindow):
         lw.setAttribute(Qt.WA_DeleteOnClose); lw.show()
         self._live_windows = [w for w in getattr(self, "_live_windows", []) if w.isVisible()] + [lw]
         return lw
+
+    def _osc_select_page(self, name: str) -> None:
+        for i, p in enumerate(self.engine.project.pages):
+            if p.name == name:
+                self.live_view.select_page(i); return
+
+    def _osc_select_fixtures(self, names: list, select: bool) -> None:
+        cur = set(self.preview.selection)
+        self.preview.set_selection(sorted(cur | set(names) if select else cur - set(names)))
 
     def _store_state(self) -> None:
         from ..light import settings as S

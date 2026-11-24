@@ -28,3 +28,21 @@ def test_driver_posts_to_ola_like_server():
         assert got[0] == ("/set_dmx", {"u": ["2"], "d": ["9,8,7"]}) and len(got) == 2
     finally:
         srv.shutdown()
+
+
+def test_enttec_pro_packet_and_driver(monkeypatch):
+    import sys, types
+    from showsuite.light.dmx.drivers.enttecpro import EnttecProDriver, build_packet
+    pk = build_packet(bytes([10, 20, 30]))
+    assert pk == bytes([0x7E, 6, 4, 0, 0, 10, 20, 30, 0xE7])
+    assert len(build_packet(bytes(600))) == 4 + 513 + 1            # tagliato a 512 + start code
+    big = build_packet(bytes(512)); assert big[2:4] == bytes([0x01, 0x02])   # 513 = 0x0201 (LSB, MSB)
+    written = []
+    class FakeSerial:
+        def __init__(self, port, **kw): self.port, self.kw = port, kw
+        def write(self, b): written.append(b)
+        def close(self): pass
+    monkeypatch.setitem(sys.modules, "serial", types.SimpleNamespace(Serial=FakeSerial))
+    d = pj.OutputConfig("enttecpro", 1, {"port": "COM3"}).build()
+    d.open(); d.send(2, b"\x01"); d.send(1, b"\x05"); d.close()
+    assert written == [bytes([0x7E, 6, 2, 0, 0, 5, 0xE7])]         # l'universo 2 è ignorato

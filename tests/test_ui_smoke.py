@@ -299,3 +299,15 @@ def test_extra_live_window_syncs_with_engine():
     w.engine.live.trigger(c); lv.sync()
     assert "A" in w.engine.live.active and lv.engine is w.engine
     lw.close()
+
+
+def test_osc_select_page_and_fixtures_reach_ui():
+    from showsuite.light.control.osc import dispatch
+    from showsuite.light.fixtures import FixtureInstance, generic_rgb
+    from showsuite.light.live import LivePage
+    from showsuite.ui.light_window import MainWindow
+    w = MainWindow(); w.engine.project.pages = [LivePage("Uno", []), LivePage("Due Due", [])]; w.live_view.rebuild()
+    w.engine.project.patch.add(FixtureInstance("Par 1", generic_rgb(), 1, 1)); w._refresh_list()
+    dispatch(w.runner, "/live/Due_Due/select", []); assert w.live_view.cur == 1
+    dispatch(w.runner, "/fixture/Par_1/select", []); assert "Par 1" in w.preview.selection
+    dispatch(w.runner, "/fixture/Par_1/deselect", []); assert "Par 1" not in w.preview.selection

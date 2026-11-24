@@ -21,6 +21,8 @@ class ControlError(ValueError):
 class ActionRunner:
     def __init__(self, engine):
         self.engine = engine
+        self.on_select_page = None        # callback(nome pagina) impostato dalla UI
+        self.on_select_fixtures = None    # callback(nomi, selezionare: bool)
 
     def run(self, action: str, args: dict | None = None, value: float = 1.0) -> None:
         """`value`: 0.0-1.0. Per i pulsanti >0 = premuto; le azioni on/off seguono il valore."""
