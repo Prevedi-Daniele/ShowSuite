@@ -15,7 +15,25 @@ CURVES = {
     "ease_in": lambda x: x * x,
     "ease_out": lambda x: 1 - (1 - x) ** 2,
     "s_curve": lambda x: x * x * (3 - 2 * x),
+    "custom": lambda x: x,      # sostituita da curve_fn(cue) quando il cue ha punti propri
 }
+
+
+def interp_curve(points, x: float) -> float:
+    """Interpolazione lineare tra i punti (x, y); estremi (0,0) e (1,1) impliciti."""
+    pts = sorted([(0.0, 0.0), *[(float(a), float(b)) for a, b in points], (1.0, 1.0)])
+    x = max(0.0, min(1.0, x))
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        if x <= x1:
+            return y0 if x1 == x0 else max(0.0, min(1.0, y0 + (y1 - y0) * (x - x0) / (x1 - x0)))
+    return 1.0
+
+
+def curve_fn(cue, name: str | None = None):
+    name = name or cue.curve
+    if name == "custom" and cue.curve_points:
+        return lambda x: interp_curve(cue.curve_points, x)
+    return CURVES[name]
 
 
 @dataclass
@@ -45,6 +63,9 @@ class LiveCue:
     beat_mult: float = 1.0      # moltiplicatore di beat (x0.25 … x4), si compone con speed
     time_offset: float = 0.0    # offset di fase in battute applicato a sequenze ed effetti
     hue_shift: float = 0.0      # rotazione della tonalità in gradi (-180…180) su tutti i colori del cue
+    mods: dict = field(default_factory=dict)   # altri modificatori: fade_time, color_temp, green_sat, xfade, pan, tilt, focus, zoom, iris, frost, fog
+    curve_points: list = field(default_factory=list)   # curva di fade personalizzata: punti (x, y) in 0-1, usata se curve == "custom"
+    no_trigger: bool = False    # "Exclude from Live Triggers"
 
 
 PAGE_PRIORITY_STEP = 100   # priorità effettiva = pagina * 100 + priorità del cue (0-99)
@@ -237,15 +258,16 @@ class LivePlayer:
         cue, now = st["cue"], self._now()
         if st["releasing"]:
             fo = st.get("fo")
-            fo = cue.fade_out if fo is None else fo
-            f = CURVES[st.get("curve_o") or cue.curve]
+            fo = (cue.fade_out if fo is None else fo) * cue.mods.get("fade_time", 1.0)
+            f = curve_fn(cue, st.get("curve_o"))
             if fo <= 0:
                 return 0.0
             return f(max(0.0, 1 - (now - st["t1"]) / fo)) * st.get("fader", 1.0)
-        f = CURVES[cue.curve]
-        if cue.fade_in <= 0:
+        f = curve_fn(cue)
+        fi = cue.fade_in * cue.mods.get("fade_time", 1.0)
+        if fi <= 0:
             return 1.0 * st.get("fader", 1.0)
-        return f(min(1.0, (now - st["t0"]) / cue.fade_in)) * st.get("fader", 1.0)
+        return f(min(1.0, (now - st["t0"]) / fi)) * st.get("fader", 1.0)
 
     @staticmethod
     def _step_values(cue: LiveCue, st: dict, beats: float) -> dict[str, float]:
@@ -337,6 +359,8 @@ class LivePlayer:
                         values.append((fx_name, c.name, round((0.5 + v / 2) * (65535 if c.fine else 255))))
             if cue.hue_shift:
                 values = self._shift_hue(values, cue.hue_shift)
+            if cue.mods:
+                values = self._apply_mods(values, cue.mods)
             for fx_name, ch, v in values:
                 fx = patch.find(fx_name)
                 cdef = next((c for c in fx.profile.channels if c.name == ch), None)
@@ -345,6 +369,44 @@ class LivePlayer:
                 factor = self._factor(fx, cdef, level, cue.dimmer)
                 for dmx_ch, dv in fx.channel_values({ch: round(v * factor)}).items():
                     layer.set(fx.universe, dmx_ch, dv)
+
+    def _apply_mods(self, values: list, m: dict) -> list:
+        """Modificatori del manuale: pan/tilt sommati (±180°), focus/zoom/iris/frost/fog moltiplicati,
+        temperatura colore (±5000 K), green saturation (±100 %), xfade to color (moltiplicato)."""
+        patch = self.engine.project.patch
+        out = []
+        for f, c, v in values:
+            try:
+                prof = patch.find(f).profile
+            except KeyError:
+                out.append((f, c, v)); continue
+            cd = next((x for x in prof.channels if x.name == c), None)
+            k = cd.kind if cd else ""
+            top = 65535 if (cd and cd.fine) else 255
+            if k in ("pan", "tilt") and m.get(k):
+                span = 540.0     # escursione standard presunta (gradi) quando il profilo non ne indica una
+                v = max(0, min(top, v + m[k] / span * top))
+            elif k in ("focus", "zoom", "iris", "frost", "fog") and k in m:
+                v = max(0, min(top, v * m[k]))
+            out.append((f, c, v))
+        ct, gs, xf = m.get("color_temp", 0.0), m.get("green_sat", 0.0), m.get("xfade")
+        if ct or gs or xf is not None:
+            last = {(f, c): v for f, c, v in out}
+            for f in {f for f, _ in last}:
+                prof = patch.find(f).profile
+                ch = [prof.channel_of_kind(k) for k in ("red", "green", "blue")]
+                if not all(ch) or not all((f, x.name) in last for x in ch):
+                    continue
+                r, g, b = (last[(f, x.name)] for x in ch)
+                t = ct / 5000.0          # >0 caldo (arancio), <0 freddo (blu)
+                r, b = r * (1 + 0.3 * t), b * (1 - 0.3 * t)
+                g = g * (1 - gs / 100.0 * 0.5) if gs else g
+                if xf is not None:       # moltiplica la distanza dal bianco
+                    mx = max(r, g, b)
+                    r, g, b = (mx - (mx - x) * xf for x in (r, g, b))
+                for x, v in zip(ch, (r, g, b)):
+                    out.append((f, x.name, round(max(0, min(255, v)))))
+        return out
 
     @staticmethod
     def _factor(fx, cdef, level: float, dimmer: float) -> float:

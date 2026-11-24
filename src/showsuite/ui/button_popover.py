@@ -15,7 +15,7 @@ class ButtonPopover(QDialog):
         self.view, self.btn, self.cue = view, btn, cue
         self.setWindowTitle(btn.label or cue.name)
         self.setWindowFlag(Qt.Popup, False)
-        self.resize(360, 380)
+        self.resize(380, 460)
         self.tabs = QTabBar()
         for t in ("Contents", "Options", "Modifiers"):
             self.tabs.addTab(t)
@@ -102,10 +102,21 @@ class ButtonPopover(QDialog):
         self.prio.valueChanged.connect(lambda v: setattr(c, "priority", v))
         self.startup = QCheckBox("Activate at startup"); self.startup.setChecked(b.startup)
         self.startup.toggled.connect(lambda on: setattr(b, "startup", on))
+        self.excl = QCheckBox("Exclude from Live Triggers"); self.excl.setChecked(c.no_trigger)
+        self.excl.toggled.connect(lambda on: setattr(c, "no_trigger", on))
+        self.edit_curve = QPushButton("Modifica curva…"); self.edit_curve.setVisible(c.curve == "custom")
+        self.edit_curve.clicked.connect(self.open_curve_editor)
+        self.curve.currentTextChanged.connect(lambda t: self.edit_curve.setVisible(t == "custom"))
         for lab, wd in (("Type", self.mode), ("", self.startup), ("Fade In", self.fade_in), ("Fade Out", self.fade_out),
-                        ("Curve", self.curve), ("Priority", self.prio)):
+                        ("Curve", self.curve), ("", self.edit_curve), ("Priority", self.prio), ("", self.excl)):
             f.addRow(lab, wd)
         return w
+
+    def open_curve_editor(self) -> None:
+        from .curve_editor import CurveDialog
+        d = CurveDialog(self.cue.curve_points, self)
+        if d.exec():
+            self.cue.curve_points = d.points()
 
     # --- Modifiers
     def _modifiers(self) -> QWidget:
@@ -131,4 +142,22 @@ class ButtonPopover(QDialog):
                           ("Hue", self.hue, self.hue_lbl)):
             row = QHBoxLayout(); row.addWidget(s, 1); row.addWidget(l); f.addRow(lab, row)
         f.addRow("Beat Multiplier", self.bmult); f.addRow("Time Offset", self.toff)
+        # altri modificatori del manuale: (chiave, etichetta, min, max, default, suffisso, scala 'add' o 'mul')
+        self.mod_widgets = {}
+        for key, lab, lo, hi, dflt, suf in (
+                ("fade_time", "Fade Time", 0, 400, 100, " %"), ("color_temp", "Color Temperature", -5000, 5000, 0, " K"),
+                ("green_sat", "Green Saturation", -100, 100, 0, " %"), ("xfade", "Xfade to Color", 0, 200, 100, " %"),
+                ("pan", "Pan Angle", -180, 180, 0, "°"), ("tilt", "Tilt Angle", -180, 180, 0, "°"),
+                ("focus", "Focus", 0, 200, 100, " %"), ("zoom", "Zoom Angle", 0, 200, 100, " %"),
+                ("iris", "Iris Opening", 0, 200, 100, " %"), ("frost", "Frost Amount", 0, 200, 100, " %"),
+                ("fog", "Fog Amount", 0, 200, 100, " %")):
+            sp = QSpinBox(); sp.setRange(lo, hi); sp.setSuffix(suf)
+            mul = key in ("fade_time", "xfade", "focus", "zoom", "iris", "frost", "fog")
+            sp.setValue(round(c.mods.get(key, dflt / 100 if mul else dflt) * (100 if mul else 1)))
+            def setter(v, key=key, mul=mul, dflt=dflt):
+                if (v == dflt):
+                    c.mods.pop(key, None)
+                else:
+                    c.mods[key] = v / 100 if mul else float(v)
+            sp.valueChanged.connect(setter); f.addRow(lab, sp); self.mod_widgets[key] = sp
         return w

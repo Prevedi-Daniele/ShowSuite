@@ -11,6 +11,7 @@ DEFAULTS = {"on_quit": "ask",            # ask | save | discard
             "adaptive_background": True,  # lo sfondo del Preview prende il colore dei fixture
             "restore_state": False,       # ripristina cue attivi e Master all'apertura
             "lock_password": "",
+            "live_triggers": True,        # MIDI canale 16 riservato ad Ableton Live (Live Triggers)
             "color_favorites": []}        # colori preferiti "#rrggbb" (max 12)          # hash sha256 (vuoto = nessuna password)
 
 

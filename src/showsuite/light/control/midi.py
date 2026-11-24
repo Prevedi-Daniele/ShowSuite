@@ -39,6 +39,7 @@ class MidiController:
         self.clock = None   # MidiClockSync opzionale (imposta dall'esterno)
         self.log = None     # ControlLog opzionale
         self.endpoint = "MIDI"
+        self.live_triggers = True   # "Enable Live Triggers" (Impostazioni): il canale 16 è riservato
 
     # --- learn ---
     def learn(self, action: str, args: dict | None = None) -> None:
@@ -55,6 +56,17 @@ class MidiController:
     def handle(self, kind: str, channel: int, number: int, value: int) -> None:
         """kind: "note_on" | "note_off" | "cc". value 0-127."""
         k = "cc" if kind == "cc" else "note"
+        if channel == 15 and self.live_triggers:
+            from . import livetriggers
+            msg = f"Channel 16: " + (f"CC {number}" if k == "cc" else f"Note {'On' if value and kind != 'note_off' else 'Off'} {number}") + f" ({value})"
+            try:
+                what = livetriggers.handle(self.runner, "cc" if k == "cc" else ("note_on" if kind == "note_on" else "note_off"), number, value)
+                if self.log:
+                    self.log.add("midi", self.endpoint, msg, f"Live Trigger: {what}" if what else "Live Trigger: nessun binding", "ok" if what else "info")
+            except (ControlError, KeyError) as e:
+                if self.log:
+                    self.log.add("midi", self.endpoint, msg, f"Live Trigger non valido: {e}", "invalid")
+            return
         if kind == "note_off":
             value = 0
         msg = f"Channel {channel}: " + (f"CC {number}" if k == "cc" else f"Note {'On' if value else 'Off'} {number}") + f" ({value})"

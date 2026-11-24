@@ -527,6 +527,22 @@ class TransportBar(QToolBar):
 
 
 class MainWindow(QMainWindow):
+    def open_settings(self):
+        from .settings_dialog import SettingsDialog
+        from ..light import settings as S
+        SettingsDialog(self).exec(); self.midi.live_triggers = S.load()["live_triggers"]
+
+    def export_live_trigger_clips(self):
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        from ..light.control import livetriggers
+        d = QFileDialog.getExistingDirectory(self, "Cartella per i clip MIDI di Ableton Live")
+        if d:
+            try:
+                n = len(livetriggers.export_clips(self.engine.project, d))
+                QMessageBox.information(self, "Live Triggers", f"Creati {n} clip MIDI (canale 16) in:\n{d}")
+            except ImportError:
+                QMessageBox.warning(self, "Live Triggers", "Serve il pacchetto mido (pip install mido).")
+
     osc_select_page = Signal(str)             # da OSC (thread di rete) -> thread UI
     osc_select_fixtures = Signal(list, bool)
     def __init__(self):
@@ -541,6 +557,8 @@ class MainWindow(QMainWindow):
         self.midi = MidiController(self.runner, self.engine.project.midi_mappings)
         self.osc: OscServer | None = None
         self.dmxin: DmxInput | None = None
+        from ..light import settings as _S
+        self.midi.live_triggers = _S.load()["live_triggers"]
         self.midi.clock = MidiClockSync(self.engine.beat)
         self.control_log = ControlLog(); self.midi.log = self.control_log
         self.undo_stack = UndoStack(pj.dumps(self.engine.project))
@@ -642,7 +660,7 @@ class MainWindow(QMainWindow):
         act(m, "Salva", self.save, "Ctrl+S"); act(m, "Salva con nome…", self.save_as)
         act(m, "Chiudi progetto", self.new, "Ctrl+W")
         act(m, "Project Browser…", self.project_browser, "Ctrl+Shift+O")
-        act(m, "Impostazioni…", lambda: __import__("showsuite.ui.settings_dialog", fromlist=["x"]).SettingsDialog(self).exec(), "Ctrl+,")
+        act(m, "Impostazioni…", self.open_settings, "Ctrl+,")
         self.recent_menu = m.addMenu("Apri recente"); self.recent_menu.aboutToShow.connect(self._fill_recent)
         ed = self.menuBar().addMenu("Modifica")
         self.act_undo = act(ed, "Annulla", self.undo, "Ctrl+Z"); self.act_redo = act(ed, "Ripristina", self.redo, "Ctrl+Shift+Z")
@@ -680,7 +698,7 @@ class MainWindow(QMainWindow):
         act(pv, "Zoom 100%", self.preview.reset_zoom, "Ctrl+0")
         act(pv, "Immagine di sfondo…", self.load_background); act(pv, "Rimuovi sfondo", self.clear_background)
         o = self.menuBar().addMenu("Uscite"); act(o, "Configura uscite…", self.outputs)
-        c = self.menuBar().addMenu("Controllo"); act(c, "MIDI / OSC…", self.control)
+        c = self.menuBar().addMenu("Controllo"); act(c, "MIDI / OSC…", self.control); act(c, "Esporta clip Live Triggers (Ableton)…", self.export_live_trigger_clips)
         act(c, "External Control Log…", self.show_control_log); act(c, "DMX Monitor…", self.show_dmx_monitor)
 
     def set_preview_edit(self, on: bool):
