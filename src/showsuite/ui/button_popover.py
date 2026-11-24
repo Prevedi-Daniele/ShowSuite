@@ -116,6 +116,19 @@ class ButtonPopover(QDialog):
         self.dimmer = QSlider(Qt.Horizontal); self.dimmer.setRange(0, 100); self.dimmer.setValue(round(c.dimmer * 100))
         self.dim_lbl = QLabel(f"{round(c.dimmer * 100)} %")
         self.dimmer.valueChanged.connect(lambda v: (setattr(c, "dimmer", v / 100), self.dim_lbl.setText(f"{v} %")))
-        for lab, s, l in (("Speed", self.speed, self.speed_lbl), ("Dimmer", self.dimmer, self.dim_lbl)):
+        from PySide6.QtWidgets import QComboBox, QDoubleSpinBox
+        self.bmult = QComboBox()
+        for lab, v in (("×¼", 0.25), ("×½", 0.5), ("×1", 1.0), ("×2", 2.0), ("×4", 4.0)):
+            self.bmult.addItem(lab, v)
+        self.bmult.setCurrentIndex(max(0, self.bmult.findData(c.beat_mult)))
+        self.bmult.currentIndexChanged.connect(lambda _: setattr(c, "beat_mult", self.bmult.currentData()))
+        self.toff = QDoubleSpinBox(); self.toff.setRange(-64, 64); self.toff.setSuffix(" battute"); self.toff.setValue(c.time_offset)
+        self.toff.valueChanged.connect(lambda v: setattr(c, "time_offset", v))
+        self.hue = QSlider(Qt.Horizontal); self.hue.setRange(-180, 180); self.hue.setValue(round(c.hue_shift))
+        self.hue_lbl = QLabel(f"{round(c.hue_shift)}°")
+        self.hue.valueChanged.connect(lambda v: (setattr(c, "hue_shift", float(v)), self.hue_lbl.setText(f"{v}°")))
+        for lab, s, l in (("Speed", self.speed, self.speed_lbl), ("Dimmer", self.dimmer, self.dim_lbl),
+                          ("Hue", self.hue, self.hue_lbl)):
             row = QHBoxLayout(); row.addWidget(s, 1); row.addWidget(l); f.addRow(lab, row)
+        f.addRow("Beat Multiplier", self.bmult); f.addRow("Time Offset", self.toff)
         return w

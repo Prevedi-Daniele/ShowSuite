@@ -42,6 +42,9 @@ class LiveCue:
     color_fx: ColorEffect | None = None
     pattern_fx: PatternEffect | None = None
     overlays: list = field(default_factory=list)   # effetti sovrapposti (Position/Color/PatternEffect): colori in screen, posizioni sommate
+    beat_mult: float = 1.0      # moltiplicatore di beat (x0.25 … x4), si compone con speed
+    time_offset: float = 0.0    # offset di fase in battute applicato a sequenze ed effetti
+    hue_shift: float = 0.0      # rotazione della tonalità in gradi (-180…180) su tutti i colori del cue
 
 
 PAGE_PRIORITY_STEP = 100   # priorità effettiva = pagina * 100 + priorità del cue (0-99)
@@ -186,6 +189,26 @@ class LivePlayer:
                 self.start(cues[n], pri.get(n, 0))
         self.engine.grand_master = float(st.get("grand_master", 1.0))
 
+    def _shift_hue(self, values: list, degrees: float) -> list:
+        """Ruota la tonalità dei fixture RGB presenti in `values` (l'ultimo valore per canale vince)."""
+        import colorsys
+        patch = self.engine.project.patch
+        last: dict[tuple[str, str], float] = {}
+        for f, c, v in values:
+            last[(f, c)] = v
+        out = [(f, c, v) for f, c, v in values]
+        for f in {f for f, _ in last}:
+            prof = patch.find(f).profile
+            chans = [prof.channel_of_kind(k) for k in ("red", "green", "blue")]
+            if not all(chans) or not all((f, c.name) in last for c in chans):
+                continue
+            r, g, b = (last[(f, c.name)] / 255 for c in chans)
+            h, sat, val = colorsys.rgb_to_hsv(r, g, b)
+            r2, g2, b2 = colorsys.hsv_to_rgb((h + degrees / 360) % 1.0, sat, val)
+            for c, v in zip(chans, (r2, g2, b2)):
+                out.append((f, c.name, round(v * 255)))
+        return out
+
     def crossfade(self, a: LiveCue, b: LiveCue, x: float, page_priority: int = 0) -> None:
         """Crossfade manuale: x=0 solo A, x=1 solo B, in mezzo entrambi proporzionali."""
         x = max(0.0, min(1.0, x))
@@ -256,7 +279,7 @@ class LivePlayer:
         self._tick_cuelists()
         for name in list(self.active):
             st = self.active[name]
-            st["bp"] += (beats - st["bl"]) * st["cue"].speed   # la velocità cambia senza salti di fase
+            st["bp"] += (beats - st["bl"]) * st["cue"].speed * st["cue"].beat_mult   # la velocità cambia senza salti di fase
             st["bl"] = beats
             level = self._level(st)
             if st["releasing"] and level <= 0:
@@ -268,18 +291,19 @@ class LivePlayer:
             if layer is None:
                 layer = self._layers[prio] = self.engine.mixer.add_layer(prio)
             values: list[tuple[str, str, float]] = []
+            bp = st["bp"] + cue.time_offset          # fase usata da sequenze ed effetti (con offset)
             if cue.preset:
                 for fx_name in cue.fixtures:
                     for ch, v in cue.preset.values.items():
                         values.append((fx_name, ch, v))
             if cue.steps:
                 for fx_name in cue.fixtures:
-                    for ch, v in self._step_values(cue, st, st["bp"]).items():
+                    for ch, v in self._step_values(cue, st, bp).items():
                         values.append((fx_name, ch, v))
             for eff in cue.effects:
-                for fx_name, v in eff.evaluate(cue.fixtures, st["bp"]).items():
+                for fx_name, v in eff.evaluate(cue.fixtures, bp).items():
                     values.append((fx_name, eff.channel, v))
-            t = st["bp"] * 0.5      # secondi equivalenti a 120 BPM; il BPM reale accelera via beat clock
+            t = bp * 0.5      # secondi equivalenti a 120 BPM; il BPM reale accelera via beat clock
             colors: dict[str, tuple] = {}     # colori combinati con blend "screen" (come gli overlay di Lightkey)
             moves: dict[str, tuple] = {}      # posizioni sommate
             def add_color(fx_name, rgb):
@@ -290,7 +314,7 @@ class LivePlayer:
                 if eff is None:
                     continue
                 if isinstance(eff, PatternEffect):
-                    for fx_name, rgb in eff.evaluate([patch.find(n) for n in cue.fixtures], st['bp'] * 0.5, st['bp']).items():
+                    for fx_name, rgb in eff.evaluate([patch.find(n) for n in cue.fixtures], bp * 0.5, bp).items():
                         add_color(fx_name, rgb)
                 elif isinstance(eff, ColorEffect):
                     for fx_name, rgb in eff.evaluate(cue.fixtures, t).items():
@@ -311,6 +335,8 @@ class LivePlayer:
                     c = prof.channel_of_kind(kind)
                     if c:
                         values.append((fx_name, c.name, round((0.5 + v / 2) * (65535 if c.fine else 255))))
+            if cue.hue_shift:
+                values = self._shift_hue(values, cue.hue_shift)
             for fx_name, ch, v in values:
                 fx = patch.find(fx_name)
                 cdef = next((c for c in fx.profile.channels if c.name == ch), None)

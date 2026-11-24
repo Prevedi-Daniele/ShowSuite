@@ -311,3 +311,12 @@ def test_osc_select_page_and_fixtures_reach_ui():
     dispatch(w.runner, "/live/Due_Due/select", []); assert w.live_view.cur == 1
     dispatch(w.runner, "/fixture/Par_1/select", []); assert "Par 1" in w.preview.selection
     dispatch(w.runner, "/fixture/Par_1/deselect", []); assert "Par 1" not in w.preview.selection
+
+
+def test_button_popover_modifiers_write_to_cue():
+    from showsuite.light.live import LiveButton, LiveCue
+    from showsuite.ui.button_popover import ButtonPopover
+    from showsuite.ui.light_window import MainWindow
+    w = MainWindow(); cue = LiveCue("C", []); btn = LiveButton("C"); pop = ButtonPopover(w.live_view, btn, cue)
+    pop.hue.setValue(-90); pop.toff.setValue(2.5); pop.bmult.setCurrentIndex(pop.bmult.findData(4.0))
+    assert (cue.hue_shift, cue.time_offset, cue.beat_mult) == (-90.0, 2.5, 4.0)

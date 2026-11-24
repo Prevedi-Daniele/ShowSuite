@@ -325,3 +325,21 @@ def test_overlay_effects_screen_blend_and_save(tmp_path):
     assert out[0] == 255 and out[2] == 255 and out[1] == 0         # rosso + blu in screen = magenta
     f = tmp_path / "o.showsuite-light"; pj.save(p, str(f)); q = pj.load(str(f))
     assert [type(o).__name__ for o in q.cues[0].overlays] == ["ColorEffect", "PositionEffect"]
+
+
+def test_modifiers_beat_mult_time_offset_hue_shift(tmp_path):
+    from showsuite.light import project as pj
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.fixtures import FixtureInstance, generic_rgb
+    from showsuite.light.live import LiveCue
+    from showsuite.light.preset import Preset
+    p = pj.Project("M"); p.patch.add(FixtureInstance("A", generic_rgb(), 1, 1))
+    red = Preset("r", {"Red": 255, "Green": 0, "Blue": 0})
+    c = LiveCue("c", ["A"], red, hue_shift=120.0); p.cues = [c]
+    e = LightEngine(p); e.live.trigger(c); e.live.update()
+    out = e.render_output(1); assert (out[0], out[1], out[2]) == (0, 255, 0)      # rosso +120° = verde
+    c2 = LiveCue("d", ["A"], beat_mult=2.0, time_offset=1.5); e.live.trigger(c2)
+    st = e.live.active["d"]; st["bl"] -= 1.0; e.live.update(); assert st["bp"] >= 2.0     # 1 battuta x 2
+    f = tmp_path / "m.showsuite-light"; p.cues = [c, c2]; pj.save(p, str(f)); q = pj.load(str(f))
+    assert (q.cues[0].hue_shift, q.cues[1].beat_mult, q.cues[1].time_offset) == (120.0, 2.0, 1.5)
+    assert q.cues[0].dimmer == 1.0 and q.cues[0].speed == 1.0          # i campi posizionali non si sono spostati

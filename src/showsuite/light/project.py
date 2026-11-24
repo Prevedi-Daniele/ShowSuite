@@ -70,7 +70,8 @@ def _cue_to_dict(c: LiveCue) -> dict:
             "effects": [vars(e) for e in c.effects],
             "steps": [{"name": x.name, "values": x.values} for x in c.steps],
             "beats_per_step": c.beats_per_step, "crossfade": c.crossfade, "loop": c.loop,
-            "speed": c.speed, "dimmer": c.dimmer,
+            "speed": c.speed, "dimmer": c.dimmer, "beat_mult": c.beat_mult, "time_offset": c.time_offset,
+            "hue_shift": c.hue_shift,
             "position_fx": vars(c.position_fx) if c.position_fx else None,
             "pattern_fx": ({**vars(c.pattern_fx), "samples": [list(x) for x in c.pattern_fx.samples]}
                            if c.pattern_fx else None),
@@ -91,7 +92,8 @@ def _cue_from_dict(d: dict) -> LiveCue:
                    PositionEffect(**d["position_fx"]) if d.get("position_fx") else None,
                    _color_fx(d["color_fx"]) if d.get("color_fx") else None,
                    _pattern_fx(d["pattern_fx"]) if d.get("pattern_fx") else None,
-                   [_overlay_from_dict(o) for o in d.get("overlays", [])])
+                   [_overlay_from_dict(o) for o in d.get("overlays", [])],
+                   d.get("beat_mult", 1.0), d.get("time_offset", 0.0), d.get("hue_shift", 0.0))
 
 
 def _overlay_to_dict(o) -> dict:
