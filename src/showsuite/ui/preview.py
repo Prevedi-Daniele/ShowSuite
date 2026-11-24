@@ -380,7 +380,7 @@ class PreviewWidget(QWidget):
         elif e.key() == Qt.Key_A and e.modifiers() & Qt.ControlModifier:
             self.set_selection([f.name for f in self.engine.project.patch.fixtures])
         elif (self.selection and e.modifiers() == Qt.ShiftModifier and len(e.text()) == 1
-              and e.text().upper() in "DCGPSMFZIR"):
+              and e.text().upper() in "DCGPSMFZIRHVX"):
             self.property_key.emit(e.text().upper())
         elif e.text() and e.text().isprintable() and not (e.modifiers() & Qt.ControlModifier):
             self._typed += e.text().lower().replace(" ", "")

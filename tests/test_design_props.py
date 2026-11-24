@@ -139,3 +139,16 @@ def test_onoff_property():
     p = pj.Project("O"); p.patch.add(FixtureInstance("S", prof, 1, 1)); e = LightEngine(p)
     P.set_simple(e, ["S"], "onoff", 1.0); assert e.values["S"]["Power"] == 255
     P.set_simple(e, ["S"], "onoff", 0.0); assert e.values["S"]["Power"] == 0
+
+
+def test_position_pad_reflects_current_values():
+    from showsuite.light import project as pj
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.fixtures import ChannelDef, FixtureInstance, FixtureProfile
+    from showsuite.ui.design_view import DesignView
+    prof = FixtureProfile("A", "M", "m", (ChannelDef("Pan", kind="pan"), ChannelDef("Tilt", kind="tilt")))
+    p = pj.Project("P"); p.patch.add(FixtureInstance("M1", prof, 1, 1)); e = LightEngine(p)
+    e.set_value("M1", "Pan", 255); e.set_value("M1", "Tilt", 0)
+    d = DesignView(e); d.set_selection(["M1"])
+    pad = next(pn for pn in d.panels.values() if hasattr(pn, "pad")).pad
+    assert pad.pad.pan == 1.0 and pad.pad.tilt == 0.0 and pad.spins[0].value() == 270.0

@@ -191,6 +191,12 @@ class DesignView(QWidget):
                 p.fill_slots(profs[k])
             if k == "position" and k in avail and hasattr(p, "pad"):
                 fx = self.engine.project.patch.find(names[0]); p.pad.set_ranges(fx.pan_range, fx.tilt_range)
+                cur = []
+                for kind in ("pan", "tilt"):
+                    c = fx.profile.channel_of_kind(kind)
+                    raw = self.engine.values.get(fx.name, {}).get(c.name, c.default) if c else None
+                    cur.append(0.5 if raw is None else raw / (65535 if c.fine else 255))
+                p.pad.show_values(*cur)
         self.refresh_dots()
 
     def refresh_dots(self) -> None:

@@ -60,6 +60,12 @@ class PositionPad(QWidget):
         for s, r in zip(self.spins, self.ranges):
             s.blockSignals(True); s.setRange(-r / 2, r / 2); s.blockSignals(False)
 
+    def show_values(self, pan: float, tilt: float) -> None:
+        """Mostra lo stato corrente (0-1) senza inviare nulla al motore."""
+        self.pad.set_values(pan, tilt)
+        for s, v, r in zip(self.spins, (pan, tilt), self.ranges):
+            s.blockSignals(True); s.setValue((v - 0.5) * r); s.blockSignals(False)
+
     def _pad(self, pan: float, tilt: float) -> None:
         for s, v, r in zip(self.spins, (pan, tilt), self.ranges):
             s.blockSignals(True); s.setValue((v - 0.5) * r); s.blockSignals(False)

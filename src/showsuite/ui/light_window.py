@@ -33,7 +33,7 @@ from ..light.engine import LightEngine
 from ..light.fixtures import FixtureInstance, PatchError
 from ..light.fixtures.ofl import OflImportError
 
-SHORTCUT_TEXT = "D Dimmer   C Color   G Gobo\nP Position   S Shutter   M Prism\nF Focus   Z Zoom   I Iris   R Frost\nO Overrides"
+SHORTCUT_TEXT = "D Dimmer   C Color   G Gobo\nP Position   S Shutter   M Prism\nF Focus   Z Zoom   I Iris   R Frost\nH Fog   V Speed   X Custom   O Overrides"
 
 
 class FaderPanel(QWidget):
