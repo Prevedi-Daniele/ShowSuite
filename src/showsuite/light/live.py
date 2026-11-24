@@ -53,6 +53,7 @@ class CueListStep:
     fade: float = 0.0
     curve: str = "linear"
     skip: bool = False
+    also: list = field(default_factory=list)   # cue group: altri cue avviati insieme in questo step
 
 
 @dataclass
@@ -337,26 +338,27 @@ class LivePlayer:
     def _enter(self, cl: CueList, idx: int, page_priority: int) -> None:
         cues = {c.name: c for c in self.engine.project.cues}
         step = cl.steps[idx]
-        base = cues.get(step.cue)
-        if base is None:
-            raise KeyError(f"cue non trovato: {step.cue}")
+        names = [step.cue] + [n for n in step.also if n != step.cue]
+        missing = [n for n in names if n not in cues]
+        if missing:
+            raise KeyError(f"cue non trovato: {missing[0]}")
         prev = self._cl.get(cl.name)
-        if prev and prev["cue"] != step.cue:
-            old = self.active.get(prev["cue"])
-            if old:
-                self.release(old["cue"], fade=step.fade, curve=step.curve)
-        live = replace(base, fade_in=step.fade, fade_out=step.fade, curve=step.curve,
-                       toggle=False, priority=cl.priority)
-        if not (prev and prev["cue"] == step.cue and step.cue in self.active
-                and not self.active[step.cue]["releasing"]):   # stesso cue: continuità, niente riavvio
-            self.active.pop(step.cue, None)
-            self._begin(live, page_priority)
-        self._cl[cl.name] = {"i": idx, "cue": step.cue, "t": self._now(), "pp": page_priority}
+        for old_name in (prev["names"] if prev else []):
+            if old_name not in names and old_name in self.active:
+                self.release(self.active[old_name]["cue"], fade=step.fade, curve=step.curve)
+        for n in names:
+            live = replace(cues[n], fade_in=step.fade, fade_out=step.fade, curve=step.curve,
+                           toggle=False, priority=cl.priority)
+            if not (prev and n in prev["names"] and n in self.active and not self.active[n]["releasing"]):
+                self.active.pop(n, None)       # stesso cue di prima: continuità, niente riavvio
+                self._begin(live, page_priority)
+        self._cl[cl.name] = {"i": idx, "cue": step.cue, "names": names, "t": self._now(), "pp": page_priority}
 
     def _stop_cl(self, cl: CueList) -> None:
         st = self._cl.pop(cl.name, None)
-        if st and st["cue"] in self.active:
-            self.release(self.active[st["cue"]]["cue"])
+        for n in (st["names"] if st else []):
+            if n in self.active:
+                self.release(self.active[n]["cue"])
 
     def _tick_cuelists(self) -> None:
         now = self._now()

@@ -280,3 +280,17 @@ def test_manual_crossfade_and_paste_between_pages():
     p1, p2 = LivePage("1", [LiveButton("A")]), LivePage("2")
     n = paste_button(p, p1, p1.buttons[0], p2, frame=0)
     assert p2.buttons == [n] and n.cue == "A copia" and len(p1.buttons) == 1 and len(p.cues) == 3
+
+
+def test_cue_group_step_starts_several_cues(tmp_path):
+    from showsuite.light import project as pj
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.live import CueList, CueListStep, LiveButton, LiveCue, LivePage
+    p = pj.Project("G"); p.cues = [LiveCue(n, []) for n in "ABC"]
+    cl = CueList("CL", [CueListStep("A", also=["B"]), CueListStep("C")])
+    p.pages = [LivePage("P", [], cuelist=cl)]; e = LightEngine(p)
+    e.live.go(cl); assert set(e.live.active) == {"A", "B"}
+    e.live.go(cl); assert {n for n, s in e.live.active.items() if not s["releasing"]} == {"C"}
+    e.live.stop_cuelist(cl); assert all(s["releasing"] for s in e.live.active.values())
+    f = tmp_path / "g.showsuite-light"; pj.save(p, str(f))
+    assert pj.load(str(f)).pages[0].cuelist.steps[0].also == ["B"]

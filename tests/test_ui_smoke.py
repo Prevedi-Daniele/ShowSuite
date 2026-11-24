@@ -262,3 +262,15 @@ def test_patch_menu_actions_smoke(tmp_path, monkeypatch):
     w.print_patch(); assert out.exists() and out.stat().st_size > 500
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(tmp_path / "f.json"), "")))
     w.export_fixtures(); assert (tmp_path / "f.json").exists()
+
+
+def test_cuelist_view_reorder_duplicate_filter():
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.live import CueList, CueListStep, LiveCue, LivePage
+    from showsuite.ui.cuelist_view import CueListView
+    e = LightEngine(); e.project.cues = [LiveCue("Alfa", []), LiveCue("Beta", [])]
+    pg = LivePage("P", [], cuelist=CueList("CL", [CueListStep("Alfa"), CueListStep("Beta", also=["Alfa"])])); e.project.pages = [pg]
+    v = CueListView(e, pg); v.table.selectRow(0); v.move(1)
+    assert [s.cue for s in pg.cuelist.steps] == ["Beta", "Alfa"]
+    v.duplicate_step(); assert len(pg.cuelist.steps) == 3
+    v.apply_filter("beta"); assert not v.table.isRowHidden(0) and v.table.isRowHidden(1)
