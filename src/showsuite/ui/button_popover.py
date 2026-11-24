@@ -31,7 +31,9 @@ class ButtonPopover(QDialog):
         self.items = QListWidget()
         self.items.itemClicked.connect(self._maybe_remove)
         self.refresh_contents()
-        return self.items
+        box = QWidget(); v = QVBoxLayout(box); v.setContentsMargins(0, 0, 0, 0); v.addWidget(self.items)
+        ov = QPushButton("Duplica effetti come overlay"); ov.clicked.connect(self.duplicate_as_overlay); v.addWidget(ov)
+        return box
 
     def refresh_contents(self) -> None:
         c = self.cue
@@ -50,6 +52,19 @@ class ButtonPopover(QDialog):
             add(f"Color Effect ({c.color_fx.mode}, {c.color_fx.duration:g} s)", "color_fx")
         if c.position_fx:
             add(f"Position Effect: {c.position_fx.pattern}", "position_fx")
+        if c.pattern_fx:
+            add(f"Pattern Effect: {c.pattern_fx.pattern}", "pattern_fx")
+        for i, o in enumerate(c.overlays):
+            add(f"Overlay: {type(o).__name__.replace('Effect', ' Effect')}", f"overlay{i}")
+
+    def duplicate_as_overlay(self) -> int:
+        """Copia gli effetti principali del cue come overlay (da modificare poi con gli strumenti di editing)."""
+        import copy
+        n = 0
+        for fx in (self.cue.color_fx, self.cue.position_fx, self.cue.pattern_fx):
+            if fx is not None:
+                self.cue.overlays.append(copy.deepcopy(fx)); n += 1
+        self.refresh_contents(); return n
 
     def _maybe_remove(self, item) -> None:
         key = item.data(Qt.UserRole)
@@ -64,6 +79,10 @@ class ButtonPopover(QDialog):
             c.color_fx = None
         elif key == "position_fx":
             c.position_fx = None
+        elif key == "pattern_fx":
+            c.pattern_fx = None
+        elif key.startswith("overlay"):
+            del c.overlays[int(key[7:])]
         elif key.startswith("effect"):
             del c.effects[int(key[6:])]
         self.refresh_contents()

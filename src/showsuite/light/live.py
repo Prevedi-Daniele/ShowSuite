@@ -41,6 +41,7 @@ class LiveCue:
     position_fx: PositionEffect | None = None
     color_fx: ColorEffect | None = None
     pattern_fx: PatternEffect | None = None
+    overlays: list = field(default_factory=list)   # effetti sovrapposti (Position/Color/PatternEffect): colori in screen, posizioni sommate
 
 
 PAGE_PRIORITY_STEP = 100   # priorità effettiva = pagina * 100 + priorità del cue (0-99)
@@ -278,30 +279,38 @@ class LivePlayer:
             for eff in cue.effects:
                 for fx_name, v in eff.evaluate(cue.fixtures, st["bp"]).items():
                     values.append((fx_name, eff.channel, v))
-            if cue.pattern_fx:
-                for fx_name, rgb in cue.pattern_fx.evaluate([patch.find(n) for n in cue.fixtures], st['bp'] * 0.5, st['bp']).items():
-                    prof = patch.find(fx_name).profile
-                    chans = [prof.channel_of_kind(k) for k in ('red', 'green', 'blue')]
-                    if all(chans):
-                        values.extend((fx_name, c.name, v) for c, v in zip(chans, rgb))
-                    elif prof.channel_of_kind('intensity'):
-                        values.append((fx_name, prof.channel_of_kind('intensity').name, max(rgb)))
-            if cue.position_fx or cue.color_fx:
-                t = st["bp"] * 0.5      # secondi equivalenti a 120 BPM; il BPM reale accelera via beat clock
-                if cue.position_fx:
-                    for fx_name, (x, y) in cue.position_fx.evaluate(cue.fixtures, t).items():
-                        prof = patch.find(fx_name).profile
-                        for kind, v in (("pan", x), ("tilt", y)):
-                            c = prof.channel_of_kind(kind)
-                            if c:
-                                values.append((fx_name, c.name, round((0.5 + v / 2) * (65535 if c.fine else 255))))
-                if cue.color_fx:
-                    for fx_name, rgb in cue.color_fx.evaluate(cue.fixtures, t).items():
-                        prof = patch.find(fx_name).profile
-                        for kind, v in zip(("red", "green", "blue"), rgb):
-                            c = prof.channel_of_kind(kind)
-                            if c:
-                                values.append((fx_name, c.name, v))
+            t = st["bp"] * 0.5      # secondi equivalenti a 120 BPM; il BPM reale accelera via beat clock
+            colors: dict[str, tuple] = {}     # colori combinati con blend "screen" (come gli overlay di Lightkey)
+            moves: dict[str, tuple] = {}      # posizioni sommate
+            def add_color(fx_name, rgb):
+                old = colors.get(fx_name)
+                colors[fx_name] = tuple(rgb) if old is None else tuple(
+                    round(255 - (255 - a_) * (255 - b_) / 255) for a_, b_ in zip(old, rgb))
+            for eff in [cue.pattern_fx, cue.color_fx, cue.position_fx, *cue.overlays]:
+                if eff is None:
+                    continue
+                if isinstance(eff, PatternEffect):
+                    for fx_name, rgb in eff.evaluate([patch.find(n) for n in cue.fixtures], st['bp'] * 0.5, st['bp']).items():
+                        add_color(fx_name, rgb)
+                elif isinstance(eff, ColorEffect):
+                    for fx_name, rgb in eff.evaluate(cue.fixtures, t).items():
+                        add_color(fx_name, rgb)
+                elif isinstance(eff, PositionEffect):
+                    for fx_name, (x, y) in eff.evaluate(cue.fixtures, t).items():
+                        ox, oy = moves.get(fx_name, (0.0, 0.0)); moves[fx_name] = (max(-1, min(1, ox + x)), max(-1, min(1, oy + y)))
+            for fx_name, rgb in colors.items():
+                prof = patch.find(fx_name).profile
+                chans = [prof.channel_of_kind(k) for k in ("red", "green", "blue")]
+                if all(chans):
+                    values.extend((fx_name, c.name, v) for c, v in zip(chans, rgb))
+                elif prof.channel_of_kind("intensity"):
+                    values.append((fx_name, prof.channel_of_kind("intensity").name, max(rgb)))
+            for fx_name, (x, y) in moves.items():
+                prof = patch.find(fx_name).profile
+                for kind, v in (("pan", x), ("tilt", y)):
+                    c = prof.channel_of_kind(kind)
+                    if c:
+                        values.append((fx_name, c.name, round((0.5 + v / 2) * (65535 if c.fine else 255))))
             for fx_name, ch, v in values:
                 fx = patch.find(fx_name)
                 cdef = next((c for c in fx.profile.channels if c.name == ch), None)

@@ -274,3 +274,17 @@ def test_cuelist_view_reorder_duplicate_filter():
     assert [s.cue for s in pg.cuelist.steps] == ["Beta", "Alfa"]
     v.duplicate_step(); assert len(pg.cuelist.steps) == 3
     v.apply_filter("beta"); assert not v.table.isRowHidden(0) and v.table.isRowHidden(1)
+
+
+def test_button_popover_overlay_duplicate_and_remove():
+    from PySide6.QtCore import Qt
+    from showsuite.light.colorfx import ColorEffect
+    from showsuite.light.live import LiveButton, LiveCue
+    from showsuite.ui.button_popover import ButtonPopover
+    from showsuite.ui.light_window import MainWindow
+    w = MainWindow(); cue = LiveCue("C", [], color_fx=ColorEffect(swatches=[(255, 0, 0)]))
+    w.engine.project.cues = [cue]; btn = LiveButton("C")
+    pop = ButtonPopover(w.live_view, btn, cue)
+    assert pop.duplicate_as_overlay() == 1 and len(cue.overlays) == 1 and cue.overlays[0] is not cue.color_fx
+    it = next(pop.items.item(i) for i in range(pop.items.count()) if pop.items.item(i).data(Qt.UserRole) == "overlay0")
+    pop._maybe_remove(it); assert cue.overlays == []

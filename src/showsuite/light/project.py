@@ -71,7 +71,8 @@ def _cue_to_dict(c: LiveCue) -> dict:
             "pattern_fx": ({**vars(c.pattern_fx), "samples": [list(x) for x in c.pattern_fx.samples]}
                            if c.pattern_fx else None),
             "color_fx": ({**vars(c.color_fx), "swatches": [list(x) for x in c.color_fx.swatches]}
-                         if c.color_fx else None)}
+                         if c.color_fx else None),
+            "overlays": [_overlay_to_dict(o) for o in c.overlays]}
 
 
 def _cue_from_dict(d: dict) -> LiveCue:
@@ -85,7 +86,21 @@ def _cue_from_dict(d: dict) -> LiveCue:
                    d.get("speed", 1.0), d.get("dimmer", 1.0),
                    PositionEffect(**d["position_fx"]) if d.get("position_fx") else None,
                    _color_fx(d["color_fx"]) if d.get("color_fx") else None,
-                   _pattern_fx(d["pattern_fx"]) if d.get("pattern_fx") else None)
+                   _pattern_fx(d["pattern_fx"]) if d.get("pattern_fx") else None,
+                   [_overlay_from_dict(o) for o in d.get("overlays", [])])
+
+
+def _overlay_to_dict(o) -> dict:
+    if isinstance(o, PositionEffect):
+        return {"type": "position", **vars(o)}
+    if isinstance(o, PatternEffect):
+        return {"type": "pattern", **vars(o), "samples": [list(x) for x in o.samples]}
+    return {"type": "color", **vars(o), "swatches": [list(x) for x in o.swatches]}
+
+
+def _overlay_from_dict(d: dict):
+    d = dict(d); t = d.pop("type")
+    return PositionEffect(**d) if t == "position" else _pattern_fx(d) if t == "pattern" else _color_fx(d)
 
 
 def _pattern_fx(d: dict) -> PatternEffect:

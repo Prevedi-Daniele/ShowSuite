@@ -308,3 +308,20 @@ def test_startup_and_restore_state(tmp_path):
     f = tmp_path / "s.showsuite-light"; pj.save(p, str(f)); q = pj.load(str(f))
     e2 = LightEngine(q); e2.live.restore_state(q.saved_state)
     assert set(e2.live.active) == {"A", "B"} and e2.grand_master == 0.4 and q.pages[0].buttons[0].startup
+
+
+def test_overlay_effects_screen_blend_and_save(tmp_path):
+    from showsuite.light import project as pj
+    from showsuite.light.colorfx import ColorEffect
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.fixtures import FixtureInstance, generic_rgb
+    from showsuite.light.live import LiveCue
+    from showsuite.light.posfx import PositionEffect
+    p = pj.Project("O"); p.patch.add(FixtureInstance("A", generic_rgb(), 1, 1))
+    red = ColorEffect(swatches=[(255, 0, 0)]); blue = ColorEffect(swatches=[(0, 0, 255)])
+    c = LiveCue("fx", ["A"], color_fx=red, overlays=[blue, PositionEffect()]); p.cues = [c]
+    e = LightEngine(p); e.live.trigger(c); e.live.update()
+    out = e.render_output(1)
+    assert out[0] == 255 and out[2] == 255 and out[1] == 0         # rosso + blu in screen = magenta
+    f = tmp_path / "o.showsuite-light"; pj.save(p, str(f)); q = pj.load(str(f))
+    assert [type(o).__name__ for o in q.cues[0].overlays] == ["ColorEffect", "PositionEffect"]
