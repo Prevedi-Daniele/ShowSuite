@@ -128,3 +128,14 @@ def test_fog_speed_custom_properties():
     P.set_simple(e, ["G"], "fog", 1.0); P.set_channel(e, ["G"], "Boh", 0.5)
     assert e.values["G"] == {"Fog": 255, "Boh": 128}
     assert P.property_state(e, ["G"], "custom") == "all"
+
+
+def test_onoff_property():
+    from showsuite.light import project as pj, properties as P
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.fixtures import ChannelDef, FixtureInstance, FixtureProfile
+    prof = FixtureProfile("A", "Switch", "1", (ChannelDef("Power", kind="onoff"),))
+    assert P.available_properties(prof) == ["onoff"]
+    p = pj.Project("O"); p.patch.add(FixtureInstance("S", prof, 1, 1)); e = LightEngine(p)
+    P.set_simple(e, ["S"], "onoff", 1.0); assert e.values["S"]["Power"] == 255
+    P.set_simple(e, ["S"], "onoff", 0.0); assert e.values["S"]["Power"] == 0

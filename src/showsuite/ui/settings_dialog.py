@@ -19,10 +19,11 @@ class SettingsDialog(QDialog):
         self.quit.setCurrentIndex([k for k, _ in QUIT].index(self.cfg["on_quit"]))
         self.last = QCheckBox("Riapri l'ultimo progetto all'avvio"); self.last.setChecked(self.cfg["open_last"])
         self.adapt = QCheckBox("Sfondo Preview adattivo al colore"); self.adapt.setChecked(self.cfg["adaptive_background"])
+        self.restore = QCheckBox("Ripristina cue attivi e Master all'apertura"); self.restore.setChecked(self.cfg["restore_state"])
         self.pw = QLineEdit(); self.pw.setEchoMode(QLineEdit.Password)
         self.pw.setPlaceholderText("vuoto = lascia com'è")
         self.clear_pw = QCheckBox("Rimuovi password di blocco")
-        form.addRow("Prima di chiudere", self.quit); form.addRow("", self.last); form.addRow("", self.adapt)
+        form.addRow("Prima di chiudere", self.quit); form.addRow("", self.last); form.addRow("", self.adapt); form.addRow("", self.restore)
         form.addRow("Nuova password blocco", self.pw); form.addRow("", self.clear_pw)
         row = QHBoxLayout(); ok = QPushButton("Fatto"); ok.clicked.connect(self.apply)
         cancel = QPushButton("Annulla"); cancel.clicked.connect(self.reject)
@@ -31,7 +32,7 @@ class SettingsDialog(QDialog):
     def apply(self):
         c = self.cfg
         c["on_quit"] = self.quit.currentData(); c["open_last"] = self.last.isChecked()
-        c["adaptive_background"] = self.adapt.isChecked()
+        c["adaptive_background"] = self.adapt.isChecked(); c["restore_state"] = self.restore.isChecked()
         if self.clear_pw.isChecked():
             c["lock_password"] = ""
         elif self.pw.text():

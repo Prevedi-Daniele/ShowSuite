@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel, QListWidget,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel, QListWidget,
                                QListWidgetItem, QPushButton, QSlider, QSpinBox, QTabBar, QVBoxLayout, QWidget,
                                QStackedWidget)
 
@@ -81,7 +81,9 @@ class ButtonPopover(QDialog):
         self.curve.currentTextChanged.connect(lambda t: setattr(c, "curve", t))
         self.prio = QSpinBox(); self.prio.setRange(0, 99); self.prio.setValue(c.priority)
         self.prio.valueChanged.connect(lambda v: setattr(c, "priority", v))
-        for lab, wd in (("Type", self.mode), ("Fade In", self.fade_in), ("Fade Out", self.fade_out),
+        self.startup = QCheckBox("Activate at startup"); self.startup.setChecked(b.startup)
+        self.startup.toggled.connect(lambda on: setattr(b, "startup", on))
+        for lab, wd in (("Type", self.mode), ("", self.startup), ("Fade In", self.fade_in), ("Fade Out", self.fade_out),
                         ("Curve", self.curve), ("Priority", self.prio)):
             f.addRow(lab, wd)
         return w

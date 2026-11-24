@@ -294,3 +294,17 @@ def test_cue_group_step_starts_several_cues(tmp_path):
     e.live.stop_cuelist(cl); assert all(s["releasing"] for s in e.live.active.values())
     f = tmp_path / "g.showsuite-light"; pj.save(p, str(f))
     assert pj.load(str(f)).pages[0].cuelist.steps[0].also == ["B"]
+
+
+def test_startup_and_restore_state(tmp_path):
+    from showsuite.light import project as pj
+    from showsuite.light.engine import LightEngine
+    from showsuite.light.live import LiveButton, LiveCue, LivePage
+    p = pj.Project("S"); p.cues = [LiveCue("A", []), LiveCue("B", [])]
+    p.pages = [LivePage("P", [LiveButton("A", startup=True), LiveButton("B")])]
+    e = LightEngine(p); assert e.live.apply_startup() == 1 and set(e.live.active) == {"A"}
+    e.live.start(p.cues[1]); e.grand_master = 0.4
+    p.saved_state = e.live.snapshot_state()
+    f = tmp_path / "s.showsuite-light"; pj.save(p, str(f)); q = pj.load(str(f))
+    e2 = LightEngine(q); e2.live.restore_state(q.saved_state)
+    assert set(e2.live.active) == {"A", "B"} and e2.grand_master == 0.4 and q.pages[0].buttons[0].startup

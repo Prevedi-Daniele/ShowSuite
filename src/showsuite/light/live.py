@@ -73,6 +73,7 @@ class LiveButton:
     frame: int = 0              # indice della cornice nella pagina
     kind: str = "button"        # "button" | "fader" (fader verticale) | "text" (etichetta, nessun cue)
     group: str = ""             # stesso gruppo = pulsanti "attached": uno solo attivo, con crossfade
+    startup: bool = False       # "Activate at startup": attivato all'apertura del progetto
 
 
 def duplicate_button(project, page, btn):
@@ -161,6 +162,28 @@ class LivePlayer:
                 self._begin(cue, page_priority)
                 st = self.active[cue.name]
             st["fader"] = value
+
+    def apply_startup(self) -> int:
+        """Attiva i cue dei pulsanti con 'Activate at startup' (non per le cuelist)."""
+        cues = {c.name: c for c in self.engine.project.cues}; n = 0
+        for pg in self.engine.project.pages:
+            for b in pg.buttons:
+                if b.startup and b.kind == "button" and b.cue in cues and b.cue not in self.active:
+                    self.start(cues[b.cue], pg.priority); n += 1
+        return n
+
+    def snapshot_state(self) -> dict:
+        """Stato da ricordare alla chiusura: cue attivi e Grand Master."""
+        return {"active": [n for n, s in self.active.items() if not s["releasing"]],
+                "grand_master": self.engine.grand_master}
+
+    def restore_state(self, st: dict) -> None:
+        cues = {c.name: c for c in self.engine.project.cues}
+        pri = {b.cue: pg.priority for pg in self.engine.project.pages for b in pg.buttons}
+        for n in st.get("active", []):
+            if n in cues and n not in self.active:
+                self.start(cues[n], pri.get(n, 0))
+        self.engine.grand_master = float(st.get("grand_master", 1.0))
 
     def crossfade(self, a: LiveCue, b: LiveCue, x: float, page_priority: int = 0) -> None:
         """Crossfade manuale: x=0 solo A, x=1 solo B, in mezzo entrambi proporzionali."""

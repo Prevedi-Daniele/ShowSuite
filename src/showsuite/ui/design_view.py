@@ -113,6 +113,12 @@ class Panel(QFrame):
             sp = QSlider(Qt.Horizontal); sp.setRange(0, 100); sp.setValue(50)
             sp.valueChanged.connect(lambda v: self._shut("strobe", v / 100))
             self.body.addWidget(QLabel("Strobe (velocità)")); self.body.addWidget(sp)
+        elif p == "onoff":
+            row = QHBoxLayout()
+            for label, v in (("On", 1.0), ("Off", 0.0)):
+                b = QPushButton(label); b.clicked.connect(lambda _=0, v=v: (P.set_simple(self.engine, self.names, "onoff", v), self.touched()))
+                row.addWidget(b)
+            self.body.addLayout(row)
         elif p == "position":
             from .position_pad import PositionPad
             fx = self.engine.project.patch.find(self.names[0]) if self.names else None

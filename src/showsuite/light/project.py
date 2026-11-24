@@ -56,6 +56,7 @@ class Project:
     shapes: list[StageShape] = field(default_factory=list)   # tralicci, linee, testi del Preview
     groups: list[FixtureGroup] = field(default_factory=list)  # gruppi di fixture
     background: bytes | None = None                           # immagine di sfondo (PNG/JPG) incorporata
+    saved_state: dict | None = None                           # ultimo stato (cue attivi, master) se "ripristina" è attivo
 
 
 def _cue_to_dict(c: LiveCue) -> dict:
@@ -149,7 +150,8 @@ def save(project: Project, path) -> None:
                      for p in project.pages],
            "midi_mappings": [vars(m) for m in project.midi_mappings], "osc_port": project.osc_port,
            "dmx_mappings": [vars(m) for m in project.dmx_mappings],
-           "shapes": [vars(sh) for sh in project.shapes], "groups": [vars(g) for g in project.groups], "has_background": project.background is not None}
+           "shapes": [vars(sh) for sh in project.shapes], "groups": [vars(g) for g in project.groups], "has_background": project.background is not None,
+           "saved_state": project.saved_state}
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         _w(z, "project.json", json.dumps(doc, indent=2, ensure_ascii=False))
         if project.background is not None:
@@ -179,6 +181,7 @@ def load(path) -> Project:
         background = z.read("assets/background") if "assets/background" in z.namelist() else None
     proj = Project(name=doc["name"])
     proj.background = background
+    proj.saved_state = doc.get("saved_state")
     proj.shapes = [StageShape(**sh) for sh in doc.get("shapes", [])]
     proj.groups = [FixtureGroup(**g) for g in doc.get("groups", [])]
     for f in doc["fixtures"]:

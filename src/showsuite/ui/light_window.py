@@ -915,6 +915,10 @@ class MainWindow(QMainWindow):
         errs = self.engine.output_errors()
         self.statusBar().showMessage(errs[-1] if errs else "")
 
+    def _store_state(self) -> None:
+        from ..light import settings as S
+        self.engine.project.saved_state = self.engine.live.snapshot_state() if S.load()["restore_state"] else None
+
     def _feedback(self) -> None:
         from ..light.control.feedback import MidiFeedback, OscFeedback
         if self.osc:
@@ -939,6 +943,11 @@ class MainWindow(QMainWindow):
         self.preview.set_selection([], emit=False); self.faders.show_fixtures([])
         self._retitle(); self._refresh_list(); self._refresh_palette()
         self.engine.live.active.clear(); self.live_view.rebuild()
+        from ..light import settings as S
+        if S.load()["restore_state"] and proj.saved_state:
+            self.engine.live.restore_state(proj.saved_state); self.bar.master.setValue(round(self.engine.grand_master * 100))
+        else:
+            self.engine.live.apply_startup()
 
     # --- annulla / ripristina
     def snapshot(self) -> None:
@@ -1050,6 +1059,7 @@ class MainWindow(QMainWindow):
     def save(self):
         if not self.path:
             return self.save_as()
+        self._store_state()
         pj.save(self.engine.project, self.path); self._saved_bytes = pj.dumps(self.engine.project)
         from ..light import recents; recents.add(self.path)
 
@@ -1074,6 +1084,12 @@ class MainWindow(QMainWindow):
                     self.save()
             else:
                 self.save()
+        if self.path and S.load()["restore_state"] and pj.dumps(self.engine.project) == self._saved_bytes:
+            self._store_state()          # solo se non ci sono modifiche scartate da non scrivere su disco
+            try:
+                pj.save(self.engine.project, self.path)
+            except OSError:
+                pass
         self.engine.stop_output(); self.midi.close(); self.midi.close_output()
         if getattr(self, "os2l", None):
             self.os2l.stop()

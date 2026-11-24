@@ -89,14 +89,14 @@ def clear_override(engine: LightEngine, fixtures: list[str], channel: str | None
 
 # ---------------------------------------------------------------- proprietà del Design view
 PROPERTY_ORDER = ("dimmer", "color", "color_wheel", "gobo_wheel", "shutter", "position",
-                  "zoom", "focus", "iris", "prism", "frost", "fog", "speed", "custom")
+                  "zoom", "focus", "iris", "prism", "frost", "fog", "speed", "onoff", "custom")
 SHORTCUTS = {"dimmer": "D", "color": "C", "color_wheel": "C", "gobo_wheel": "G", "position": "P",
              "shutter": "S", "prism": "M", "focus": "F", "zoom": "Z", "iris": "I", "frost": "R",
-             "fog": "H", "speed": "V", "custom": "X"}
+             "fog": "H", "speed": "V", "onoff": "1", "custom": "X"}
 PROPERTY_TITLES = {"dimmer": "Dimmer", "color": "Color", "color_wheel": "Color Wheel",
                    "gobo_wheel": "Gobo Wheel", "shutter": "Shutter/Strobe", "position": "Position",
                    "zoom": "Zoom", "focus": "Focus", "iris": "Iris", "prism": "Prism", "frost": "Frost",
-                   "fog": "Fog", "speed": "Movement Speed", "custom": "Custom"}
+                   "fog": "Fog", "speed": "Movement Speed", "onoff": "On/Off", "custom": "Custom"}
 _COLOR_KINDS = ("red", "green", "blue", "white", "amber", "uv")
 
 

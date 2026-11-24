@@ -9,6 +9,7 @@ from pathlib import Path
 DEFAULTS = {"on_quit": "ask",            # ask | save | discard
             "open_last": False,           # all'avvio riapre l'ultimo progetto
             "adaptive_background": True,  # lo sfondo del Preview prende il colore dei fixture
+            "restore_state": False,       # ripristina cue attivi e Master all'apertura
             "lock_password": "",
             "color_favorites": []}        # colori preferiti "#rrggbb" (max 12)          # hash sha256 (vuoto = nessuna password)
 
