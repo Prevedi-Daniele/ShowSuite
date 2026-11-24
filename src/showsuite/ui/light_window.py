@@ -627,6 +627,7 @@ class MainWindow(QMainWindow):
         act(ed, "Esporta palette…", self.export_palettes); act(ed, "Importa palette…", self.import_palettes)
         v = self.menuBar().addMenu("Vista")
         act(v, "Design", lambda: self.show_view(0), "Ctrl+D"); act(v, "Live", lambda: self.show_view(1), "Ctrl+L"); act(v, "Effetti", lambda: self.show_view(2), "Ctrl+E")
+        act(v, "Nuova finestra Live", self.new_live_window, "Ctrl+Shift+L")
         act(v, "Crossfade manuale…", lambda: self.live_view.crossfade_dialog())
         p = self.menuBar().addMenu("Patch")
         act(p, "Finestra Patch…", self.patch_window, "Ctrl+P")
@@ -914,6 +915,17 @@ class MainWindow(QMainWindow):
         self.preview.update()
         errs = self.engine.output_errors()
         self.statusBar().showMessage(errs[-1] if errs else "")
+
+    def new_live_window(self):
+        """Finestra Live aggiuntiva e indipendente (stesso progetto e stessi cue) per un secondo monitor."""
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QMainWindow
+        lw = QMainWindow(self); lw.setWindowTitle(f"Live — {self.engine.project.name}"); lw.resize(900, 520)
+        lv = LiveView(self.engine); lw.setCentralWidget(lv); lv.rebuild()
+        t = QTimer(lw); t.timeout.connect(lv.sync); t.start(80)
+        lw.setAttribute(Qt.WA_DeleteOnClose); lw.show()
+        self._live_windows = [w for w in getattr(self, "_live_windows", []) if w.isVisible()] + [lw]
+        return lw
 
     def _store_state(self) -> None:
         from ..light import settings as S

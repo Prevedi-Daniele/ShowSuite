@@ -288,3 +288,14 @@ def test_button_popover_overlay_duplicate_and_remove():
     assert pop.duplicate_as_overlay() == 1 and len(cue.overlays) == 1 and cue.overlays[0] is not cue.color_fx
     it = next(pop.items.item(i) for i in range(pop.items.count()) if pop.items.item(i).data(Qt.UserRole) == "overlay0")
     pop._maybe_remove(it); assert cue.overlays == []
+
+
+def test_extra_live_window_syncs_with_engine():
+    from showsuite.light.live import LiveButton, LiveCue, LivePage
+    from showsuite.ui.light_window import MainWindow
+    w = MainWindow(); c = LiveCue("A", []); w.engine.project.cues = [c]
+    w.engine.project.pages = [LivePage("P", [LiveButton("A")])]; w.live_view.rebuild()
+    lw = w.new_live_window(); lv = lw.centralWidget()
+    w.engine.live.trigger(c); lv.sync()
+    assert "A" in w.engine.live.active and lv.engine is w.engine
+    lw.close()
