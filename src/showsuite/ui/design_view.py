@@ -60,6 +60,27 @@ class Panel(QFrame):
         P.clear_property(self.engine, self.names, self.prop)
         self.view.refresh_dots()
 
+    def _more_color(self):
+        from ..light import settings as S
+        col = QColorDialog.getColor(parent=self)
+        if col.isValid():
+            S.add_favorite(col.name()); self._fill_favorites(); self._rgb(col)
+
+    def _fill_favorites(self):
+        from ..light import settings as S
+        while self.fav_row.count():
+            w = self.fav_row.takeAt(0).widget()
+            if w:
+                w.setParent(None)
+        for c in S.load()["color_favorites"][:6]:
+            b = QPushButton(); b.setFixedSize(22, 22); b.setToolTip(f"{c} — tasto destro per rimuovere")
+            b.setStyleSheet(f"background:{c};border:1px solid #6d7385;border-radius:11px;min-height:0;padding:0;")
+            b.clicked.connect(lambda _=0, c=c: self._rgb(QColor(c)))
+            b.setContextMenuPolicy(Qt.CustomContextMenu)
+            b.customContextMenuRequested.connect(lambda _p, c=c: (S.remove_favorite(c), self._fill_favorites()))
+            self.fav_row.addWidget(b)
+        self.fav_row.addStretch()
+
     def touched(self):
         self.dot.state(P.property_state(self.engine, self.names, self.prop))
 
@@ -78,8 +99,9 @@ class Panel(QFrame):
                 b.setStyleSheet(f"background:{c};border:1px solid #33363f;border-radius:4px;min-height:0;padding:0;")
                 b.clicked.connect(lambda _=0, c=c: self._rgb(QColor(c)))
                 g.addWidget(b, i // 4, i % 4)
-            more = QPushButton("Altro…"); more.clicked.connect(
-                lambda: (lambda col: col.isValid() and self._rgb(col))(QColorDialog.getColor(parent=self)))
+            self.fav_row = QHBoxLayout(); self.body.addLayout(self.fav_row); self._fill_favorites()
+            more = QPushButton("Altro…"); more.setToolTip("Scegli un colore (viene aggiunto ai preferiti)")
+            more.clicked.connect(self._more_color)
             self.body.addWidget(more)
         elif p in ("color_wheel", "gobo_wheel", "custom"):
             self.slots = QVBoxLayout(); self.body.addLayout(self.slots)

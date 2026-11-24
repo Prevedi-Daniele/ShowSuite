@@ -133,7 +133,7 @@ class OutputsDialog(QDialog):
         v = QVBoxLayout(self)
         self.list = QListWidget(); v.addWidget(self.list)
         f = QFormLayout()
-        self.type = QComboBox(); self.type.addItems(["opendmx", "artnet", "sacn"])
+        self.type = QComboBox(); self.type.addItems(["opendmx", "artnet", "sacn", "ola"])
         self.uni = QSpinBox(); self.uni.setRange(1, pj.MAX_UNIVERSES)
         self.target = QComboBox(); self.target.setEditable(True)
         self.type.currentTextChanged.connect(self._refill)
@@ -158,6 +158,8 @@ class OutputsDialog(QDialog):
                 pass
         elif kind == "artnet":
             self.target.addItem("255.255.255.255")
+        elif kind == "ola":
+            self.target.addItem("127.0.0.1:9090")
 
     def _reload(self):
         self.list.clear()
@@ -166,8 +168,12 @@ class OutputsDialog(QDialog):
 
     def _add(self):
         k, t = self.type.currentText(), self.target.currentText().strip()
-        params = {"port": t} if k == "opendmx" else ({"host": t} if k == "artnet" else
-                                                      ({"unicast": t} if t else {}))
+        if k == "ola":
+            host, _, port = (t or "127.0.0.1:9090").partition(":")
+            params = {"host": host, "port": int(port or 9090)}
+        else:
+            params = {"port": t} if k == "opendmx" else ({"host": t} if k == "artnet" else
+                                                          ({"unicast": t} if t else {}))
         if k == "opendmx" and not t:
             QMessageBox.warning(self, "Uscite", "Scegli la porta seriale dell'interfaccia.")
             return
@@ -618,6 +624,7 @@ class MainWindow(QMainWindow):
         act(ed, "Ripristina valori predefiniti", self.reset_props)
         ed.addSeparator()
         act(ed, "Cerca nel progetto…", self.search_dialog, "Ctrl+F")
+        act(ed, "Esporta palette…", self.export_palettes); act(ed, "Importa palette…", self.import_palettes)
         v = self.menuBar().addMenu("Vista")
         act(v, "Design", lambda: self.show_view(0), "Ctrl+D"); act(v, "Live", lambda: self.show_view(1), "Ctrl+L"); act(v, "Effetti", lambda: self.show_view(2), "Ctrl+E")
         act(v, "Crossfade manuale…", lambda: self.live_view.crossfade_dialog())
@@ -957,6 +964,22 @@ class MainWindow(QMainWindow):
         self.engine.live.active.clear()
         self.preview.set_selection([n for n in sel if n in valid])
         self._retitle(); self._refresh_list(); self._refresh_palette(); self.live_view.rebuild(); self.preview.update()
+
+    def export_palettes(self) -> None:
+        from ..light.preset import export_palettes
+        f, _ = QFileDialog.getSaveFileName(self, "Esporta palette", "palette.json", "Palette (*.json)")
+        if f:
+            export_palettes(self.engine.project.palettes, f)
+
+    def import_palettes(self) -> None:
+        from ..light.preset import import_palettes
+        f, _ = QFileDialog.getOpenFileName(self, "Importa palette", "", "Palette (*.json)")
+        if f:
+            try:
+                import_palettes(self.engine.project.palettes, f)
+            except Exception as e:
+                QMessageBox.warning(self, "Importa", str(e))
+            self.palette_tree.refresh()
 
     def search_dialog(self) -> None:
         from .search_dialog import SearchDialog

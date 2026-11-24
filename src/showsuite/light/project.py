@@ -6,7 +6,7 @@ import re
 import zipfile
 from dataclasses import dataclass, field
 
-from .dmx.drivers import ArtNetDriver, OpenDmxDriver, OutputDriver, SacnDriver
+from .dmx.drivers import ArtNetDriver, OlaDriver, OpenDmxDriver, OutputDriver, SacnDriver
 from .colorfx import ColorEffect
 from .patfx import PatternEffect
 from .effects import Effect
@@ -35,6 +35,8 @@ class OutputConfig:
             return ArtNetDriver(p.get("host", "255.255.255.255"))
         if self.type == "sacn":
             return SacnDriver(p.get("unicast"), priority=p.get("priority", 100))
+        if self.type == "ola":
+            return OlaDriver(p.get("host", "127.0.0.1"), int(p.get("port", 9090)))
         if self.type == "opendmx":
             return OpenDmxDriver(p["port"], universe=self.universe)
         raise ValueError(f"tipo uscita sconosciuto: {self.type}")

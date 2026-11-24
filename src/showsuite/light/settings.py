@@ -9,7 +9,8 @@ from pathlib import Path
 DEFAULTS = {"on_quit": "ask",            # ask | save | discard
             "open_last": False,           # all'avvio riapre l'ultimo progetto
             "adaptive_background": True,  # lo sfondo del Preview prende il colore dei fixture
-            "lock_password": ""}          # hash sha256 (vuoto = nessuna password)
+            "lock_password": "",
+            "color_favorites": []}        # colori preferiti "#rrggbb" (max 12)          # hash sha256 (vuoto = nessuna password)
 
 
 def _file() -> Path:
@@ -38,3 +39,16 @@ def hash_pw(pw: str) -> str:
 
 def check_pw(d: dict, pw: str) -> bool:
     return not d["lock_password"] or hash_pw(pw) == d["lock_password"]
+
+
+MAX_FAVORITES = 12
+
+
+def add_favorite(color: str) -> list[str]:
+    d = load(); fav = [c for c in d["color_favorites"] if c.lower() != color.lower()]
+    d["color_favorites"] = ([color.lower()] + fav)[:MAX_FAVORITES]; save(d); return d["color_favorites"]
+
+
+def remove_favorite(color: str) -> list[str]:
+    d = load(); d["color_favorites"] = [c for c in d["color_favorites"] if c.lower() != color.lower()]; save(d)
+    return d["color_favorites"]
