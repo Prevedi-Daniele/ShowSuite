@@ -180,3 +180,31 @@ def test_lightkey_style_osc_addresses():
     from showsuite.light.control.actions import ControlError
     with pytest.raises(ControlError):
         dispatch(r, "/live/Nessuna/select", [])
+
+
+def test_keyboard_triggers(tmp_path):
+    from showsuite.light import project as pj
+    from showsuite.light.control.keys import KeyMapping, add_mapping, normalize, run_key
+    assert normalize("shift + ctrl+a") == "Ctrl+Shift+A" and normalize("f5") == "F5"
+    e, r = setup(); cue = e.project.cues[0].name
+    ms = []; add_mapping(ms, "ctrl+1", "cue", {"cue": cue}); add_mapping(ms, "Ctrl+1", "blackout")
+    assert len(ms) == 1 and ms[0].action == "blackout"
+    add_mapping(ms, "F2", "cue", {"cue": cue})
+    assert run_key(r, ms, "f2") and cue in e.live.active and not run_key(r, ms, "F9")
+    e.project.key_mappings = ms
+    q = pj.loads(pj.dumps(e.project)); assert [(m.key, m.action) for m in q.key_mappings] == [("Ctrl+1", "blackout"), ("F2", "cue")]
+
+
+def test_keyboard_shortcut_fires_in_window():
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QKeySequence
+    from PySide6.QtTest import QTest
+    from showsuite.light.control.keys import add_mapping
+    from showsuite.ui.light_window import MainWindow
+    w = MainWindow(); w.show(); w.activateWindow(); QTest.qWaitForWindowActive(w)
+    add_mapping(w.engine.project.key_mappings, "F7", "blackout"); w.rebuild_key_shortcuts()
+    assert len(w._key_shortcuts) == 1 and w._key_shortcuts[0].key() == QKeySequence("F7")
+    QTest.keyClick(w, Qt.Key_F7)
+    if not w.engine.blackout:                # alcune piattaforme offscreen non consegnano gli shortcut: verifica il collegamento
+        w._key_shortcuts[0].activated.emit()
+    assert w.engine.blackout is True

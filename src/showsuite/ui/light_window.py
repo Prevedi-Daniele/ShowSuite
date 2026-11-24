@@ -287,6 +287,12 @@ class ControlDialog(QDialog):
         for w_ in (self.dmx_btn, QLabel("U"), self.dmx_uni, QLabel("Ch"), self.dmx_ch, add_dmx):
             drow.addWidget(w_)
         v.addLayout(drow)
+        krow = QHBoxLayout()
+        from PySide6.QtWidgets import QKeySequenceEdit
+        self.key_edit = QKeySequenceEdit(); self.key_edit.setMaximumSequenceLength(1)
+        add_key = QPushButton("Mappa tasto → azione"); add_key.clicked.connect(self._add_key)
+        krow.addWidget(QLabel("Tastiera")); krow.addWidget(self.key_edit, 1); krow.addWidget(add_key)
+        v.addLayout(krow)
         # learn
         f = QFormLayout()
         self.action = QComboBox(); self.action.addItems(ACTIONS)
@@ -376,6 +382,17 @@ class ControlDialog(QDialog):
             args = {"fixture": self.arg1.currentText(), "channel": self.arg2.currentText()}
         return a, args
 
+    def _add_key(self):
+        from ..light.control.keys import add_mapping
+        a, args = self._action_args()
+        k = self.key_edit.keySequence().toString()
+        if not k:
+            QMessageBox.information(self, "Tastiera", "Premi la combinazione di tasti nel campo."); return
+        if a in ("cue", "fixture") and not all(args.values()):
+            QMessageBox.information(self, "Tastiera", "Scegli cue o fixture/canale."); return
+        add_mapping(self.win.engine.project.key_mappings, k, a, args)
+        self.win.rebuild_key_shortcuts(); self._reload()
+
     def _add_dmx(self):
         a, args = self._action_args()
         if a in ("cue", "fixture") and not all(args.values()):
@@ -415,14 +432,18 @@ class ControlDialog(QDialog):
             self.list.addItem(f"MIDI {m.kind} ch{m.channel + 1} #{m.number} → {m.action} {m.args or ''}")
         for m in self.win.engine.project.dmx_mappings:
             self.list.addItem(f"DMX U{m.universe} ch{m.channel} → {m.action} {m.args or ''}")
+        for m in self.win.engine.project.key_mappings:
+            self.list.addItem(f"Tasto {m.key} → {m.action} {m.args or ''}")
 
     def _remove(self):
         i = self.list.currentRow()
-        mm, dm = self.win.midi.mappings, self.win.engine.project.dmx_mappings
+        mm, dm, km = self.win.midi.mappings, self.win.engine.project.dmx_mappings, self.win.engine.project.key_mappings
         if 0 <= i < len(mm):
             del mm[i]
         elif len(mm) <= i < len(mm) + len(dm):
             del dm[i - len(mm)]
+        elif len(mm) + len(dm) <= i < len(mm) + len(dm) + len(km):
+            del km[i - len(mm) - len(dm)]; self.win.rebuild_key_shortcuts()
         else:
             return
         self._reload()
@@ -933,6 +954,25 @@ class MainWindow(QMainWindow):
         self._live_windows = [w for w in getattr(self, "_live_windows", []) if w.isVisible()] + [lw]
         return lw
 
+    def rebuild_key_shortcuts(self) -> None:
+        """Una QShortcut per ogni mappatura da tastiera del progetto."""
+        from PySide6.QtGui import QKeySequence, QShortcut
+        from ..light.control.keys import run_key
+        for sc in getattr(self, "_key_shortcuts", []):
+            sc.setEnabled(False); sc.deleteLater()
+        self._key_shortcuts = []
+        for m in self.engine.project.key_mappings:
+            sc = QShortcut(QKeySequence(m.key), self); sc.setContext(Qt.WindowShortcut)
+            sc.activated.connect(lambda k=m.key: self._run_key(k))
+            self._key_shortcuts.append(sc)
+
+    def _run_key(self, key: str) -> None:
+        from ..light.control.keys import run_key
+        try:
+            run_key(self.runner, self.engine.project.key_mappings, key)
+        except Exception as e:
+            self.statusBar().showMessage(f"Tastiera {key}: {e}", 4000)
+
     def _osc_select_page(self, name: str) -> None:
         for i, p in enumerate(self.engine.project.pages):
             if p.name == name:
@@ -969,7 +1009,7 @@ class MainWindow(QMainWindow):
         self.engine.clear_programmer()
         self.preview.set_selection([], emit=False); self.faders.show_fixtures([])
         self._retitle(); self._refresh_list(); self._refresh_palette()
-        self.engine.live.active.clear(); self.live_view.rebuild()
+        self.engine.live.active.clear(); self.live_view.rebuild(); self.rebuild_key_shortcuts()
         from ..light import settings as S
         if S.load()["restore_state"] and proj.saved_state:
             self.engine.live.restore_state(proj.saved_state); self.bar.master.setValue(round(self.engine.grand_master * 100))

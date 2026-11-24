@@ -13,6 +13,7 @@ from .effects import Effect
 from .posfx import PositionEffect
 from .fixtures import ChannelDef, FixtureInstance, FixtureProfile, Patch
 from .control.dmxin import DmxMapping
+from .control.keys import KeyMapping
 from .control.midi import MidiMapping
 from .stage import FixtureGroup, StageShape
 from .live import CueList, CueListStep, LiveButton, LiveCue, LivePage
@@ -55,6 +56,7 @@ class Project:
     midi_mappings: list[MidiMapping] = field(default_factory=list)
     osc_port: int = 21600
     dmx_mappings: list[DmxMapping] = field(default_factory=list)
+    key_mappings: list[KeyMapping] = field(default_factory=list)
     shapes: list[StageShape] = field(default_factory=list)   # tralicci, linee, testi del Preview
     groups: list[FixtureGroup] = field(default_factory=list)  # gruppi di fixture
     background: bytes | None = None                           # immagine di sfondo (PNG/JPG) incorporata
@@ -167,6 +169,7 @@ def save(project: Project, path) -> None:
                      for p in project.pages],
            "midi_mappings": [vars(m) for m in project.midi_mappings], "osc_port": project.osc_port,
            "dmx_mappings": [vars(m) for m in project.dmx_mappings],
+           "key_mappings": [vars(m) for m in project.key_mappings],
            "shapes": [vars(sh) for sh in project.shapes], "groups": [vars(g) for g in project.groups], "has_background": project.background is not None,
            "saved_state": project.saved_state}
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
@@ -225,4 +228,5 @@ def load(path) -> Project:
     proj.midi_mappings = [MidiMapping(**m) for m in doc.get("midi_mappings", [])]
     proj.osc_port = doc.get("osc_port", 21600)
     proj.dmx_mappings = [DmxMapping(**m) for m in doc.get("dmx_mappings", [])]
+    proj.key_mappings = [KeyMapping(**m) for m in doc.get("key_mappings", [])]
     return proj
