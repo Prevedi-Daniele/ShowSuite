@@ -969,6 +969,16 @@ class Runtime:
             if load == True and first is not None and container.cue_type == TYPE_LIST:
                 self.load_cue(first)
 
+    def ensure_playheads(self) -> None:
+        """Inizializza i playhead mancanti o non più validi senza fermare nulla."""
+        for container in self.workspace.lists:
+            identifier = self.playheads.get(container.unique_id, None)
+            valid = identifier is not None and (identifier == "" and len(container.children) == 0 or (
+                identifier != "" and self.workspace.find_by_id(identifier) is not None))
+            if valid == False:
+                first = self._first_cue_of(container)
+                self.playheads[container.unique_id] = first.unique_id if first is not None else ""
+
     def load_cue(self, cue: Cue | None, seconds: float | None = None, ignore_pre_wait: bool = False) -> None:
         """Prepara il cue (e la sua sequenza). seconds<0 = a |seconds| dalla fine."""
         if cue is None:
