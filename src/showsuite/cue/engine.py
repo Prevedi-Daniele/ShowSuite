@@ -228,6 +228,7 @@ class Runtime:
         self.panic_timer = 0.0
         self._last_time = self.clock.now()
         self._last_go_time = -math.inf
+        self._go_pending = ""
         self._fade_snapshots: dict[str, dict] = {}
         self.reset_workspace(load=False)
 
@@ -537,7 +538,11 @@ class Runtime:
             return False
         self._last_go_time = now
         sequence = self.sequence_cues(cue)
-        self.start_cue(cue, origin=origin, audition=audition)
+        self._go_pending = cue.unique_id
+        try:
+            self.start_cue(cue, origin=origin, audition=audition)
+        finally:
+            self._go_pending = ""
         last_cue = sequence[-1]
         if cue.cue_type == TYPE_GROUP and cue.group_mode() == GROUP_START_FIRST_AND_ENTER and len(cue.children) > 1:
             self.set_playhead(cue.children[1], container)
@@ -572,7 +577,8 @@ class Runtime:
         self.states[cue.unique_id] = state
         state.pre_wait_total = 0.0 if preview == True else max(0.0, float(cue.pre_wait))
         state.post_wait_total = self._effective_post_wait(cue)
-        self.emit("start", cue, {"origin": origin, "preview": preview})
+        by_go = self._go_pending == cue.unique_id
+        self.emit("start", cue, {"origin": origin, "preview": preview, "audition": audition, "by_go": by_go})
         if state.pre_wait_total > EPSILON:
             state.pre_wait_running = True
             self.emit("pre_wait_start", cue, {})
@@ -910,6 +916,7 @@ class Runtime:
         for state in list(self.states.values()):
             if state.is_active() == True and state.paused == False:
                 self.pause_cue_single(state)
+        self.emit("pause_all", None, {})
 
     def pause_cue_single(self, state: CueState) -> None:
         state.paused = True
@@ -926,16 +933,25 @@ class Runtime:
                 if handler is not None and state.virtual == False:
                     handler.resume(self, state)
                 self.emit("resume", state.cue, {})
+        self.emit("resume_all", None, {})
 
     def panic_all(self) -> None:
         for state in list(self.states.values()):
             self.panic_cue(state.cue)
+        self.emit("panic_all", None, {})
 
-    def hard_stop_all(self) -> None:
+    def stop_all(self) -> None:
+        for state in list(self.states.values()):
+            self.stop_cue(state.cue)
+        self.emit("stop_all", None, {})
+
+    def hard_stop_all(self, announce: bool = True) -> None:
         for state in list(self.states.values()):
             if state.is_active() == True:
                 self._terminate_state(state, True)
         self._prune()
+        if announce == True:
+            self.emit("hard_stop_all", None, {})
 
     def reset_cue(self, cue: Cue | None) -> None:
         if cue is None:
@@ -953,7 +969,7 @@ class Runtime:
         self.emit("reset", cue, {})
 
     def reset_workspace(self, load: bool = True) -> None:
-        self.hard_stop_all()
+        self.hard_stop_all(announce=False)
         self.live.clear()
         self.temp_targets.clear()
         self.fired.clear()
@@ -968,6 +984,8 @@ class Runtime:
             self.playheads[container.unique_id] = first.unique_id if first is not None else ""
             if load == True and first is not None and container.cue_type == TYPE_LIST:
                 self.load_cue(first)
+        if load == True:
+            self.emit("reset_all", None, {})
 
     def ensure_playheads(self) -> None:
         """Inizializza i playhead mancanti o non più validi senza fermare nulla."""

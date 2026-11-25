@@ -233,3 +233,50 @@ def test_trasporto_reale_udp_tcp_e_testo():
         tcp.close()
     finally:
         server.stop()
+
+
+def broadcast_messages(client):
+    return [(address, arguments) for address, arguments in client.messages if address.startswith("/qlab/event")]
+
+
+def test_show_control_broadcast_listen_e_forme():
+    workspace, runtime, api, client, cues = make_api()
+    cues[0].number = "24"
+    cues[0].name = "intro music"
+    api.handle("/listen/go/number", [], client)
+    api.handle("/listen/panicAll", [], client)
+    api.handle("/go", [], client)
+    messages = broadcast_messages(client)
+    assert messages == [("/qlab/event/workspace/go/number", ["24"])]
+    api.handle("/panic", [], client)
+    assert ("/qlab/event/workspace/panicAll", []) in broadcast_messages(client)
+
+
+def test_show_control_broadcast_tutte_le_forme_start_e_stop():
+    workspace, runtime, api, client, cues = make_api()
+    api.handle("/listen", [], client)
+    api.handle("/cue/2/start", [], client)
+    addresses = [address for address, arguments in broadcast_messages(client)]
+    assert "/qlab/event/workspace/cue/start" in addresses
+    assert "/qlab/event/workspace/cue/start/uniqueID" in addresses
+    assert "/qlab/event/workspace/go" not in addresses
+    start = [m for m in broadcast_messages(client) if m[0] == "/qlab/event/workspace/cue/start"][0]
+    assert start[1] == ["2", "Due", cues[1].unique_id, "Wait"]
+    api.handle("/stop", [], client)
+    assert "/qlab/event/workspace/cue/stop" in [a for a, x in broadcast_messages(client)]
+    assert "/qlab/event/workspace/stopAll" in [a for a, x in broadcast_messages(client)]
+
+
+def test_ignore_e_event_format():
+    workspace, runtime, api, client, cues = make_api()
+    api.handle("/listen/go/number", [], client)
+    api.handle("/eventFormat", ["/cue/#data#/start"], client)
+    api.handle("/go", [], client)
+    sent = [(address, arguments) for address, arguments in client.messages if address.startswith("/cue/")]
+    assert sent == [("/cue/1/start", [])]
+    client.messages.clear()
+    api.handle("/ignore", [], client)
+    api.handle("/go", [], client)
+    assert broadcast_messages(client) == []
+    api.handle("/eventFormat", [], client)
+    assert last_reply(client)[1]["data"] == "/cue/#data#/start"

@@ -117,12 +117,20 @@ ACTIONS = ["go", "start", "startAndAutoloadNext", "stop", "pause", "resume", "to
            "prune", "pruneCommands", "safeSort", "safeSortCommands", "collateAndStart"]
 
 
+BROADCAST_CUE_EVENTS = ("go", "auditionGo", "cue/start", "cue/stop", "playhead")
+BROADCAST_FORMS = ("args", "number", "name", "uniqueID", "type")
+BROADCAST_NO_ARGUMENT_EVENTS = {"pause_all": "pauseAll", "resume_all": "resumeAll", "panic_all": "panicAll",
+                                "stop_all": "stopAll", "hard_stop_all": "hardStopAll", "reset_all": "resetAll"}
+
+
 class Session:
     def __init__(self):
         self.permissions: dict = {}
         self.always_reply = False
         self.reply_format = ""
         self.updates = False
+        self.subscriptions: set = set()
+        self.event_format = ""
         self.forget_me_not = False
         self.last_seen = time.monotonic()
         self.client = None
@@ -142,11 +150,97 @@ class QLabApi:
 
     # ------------------------------------------------------------------ push
     def _on_runtime_event(self, runtime: Runtime, name: str, cue, data: dict) -> None:
+        self._broadcast_event(runtime, name, cue, data)
         if name == "playhead":
             identifier = cue.unique_id if cue is not None else ""
             address = "/update/workspace/%s/cueList/%s/playbackPosition" % (runtime.workspace.workspace_id,
                                                                             data.get("list", ""))
             self._push(address, [identifier] if identifier != "" else [])
+
+    # ------------------------------------------------------------------ show control broadcast (manuale 8.7)
+    def _broadcast_event(self, runtime: Runtime, name: str, cue, data: dict) -> None:
+        event = None
+        if name == "start" and cue is not None:
+            if data.get("by_go", False) == True:
+                event = "auditionGo" if data.get("audition", False) == True else "go"
+            else:
+                event = "cue/start"
+        elif name == "stop" and cue is not None:
+            event = "cue/stop"
+        elif name == "playhead" and cue is not None:
+            event = "playhead"
+        elif name in BROADCAST_NO_ARGUMENT_EVENTS:
+            event = BROADCAST_NO_ARGUMENT_EVENTS[name]
+        if event is None:
+            return
+        arguments = []
+        if event in BROADCAST_CUE_EVENTS:
+            arguments = [cue.number, cue.display_name(), cue.unique_id, TYPE_NAMES.get(cue.cue_type, cue.cue_type)]
+        for session in list(self.sessions.values()):
+            if len(session.subscriptions) == 0 or session.client is None:
+                continue
+            for form in BROADCAST_FORMS if event in BROADCAST_CUE_EVENTS else ("args",):
+                if (event, form) not in session.subscriptions:
+                    continue
+                self._send_broadcast(session, event, form, arguments)
+
+    @staticmethod
+    def _send_broadcast(session: "Session", event: str, form: str, arguments: list) -> None:
+        address = "/qlab/event/workspace/" + event
+        if form == "args":
+            payload = arguments
+        else:
+            address = address + "/" + form
+            payload = [arguments[BROADCAST_FORMS.index(form) - 1]]
+        if session.event_format != "":
+            if form == "args" and len(arguments) > 0:
+                return
+            text = session.event_format.replace("#address#", address)
+            text = text.replace("#data#", str(payload[0]) if len(payload) > 0 else "")
+            text = text.replace("#status#", "ok").replace("#workspace_id#", "")
+            parts = text.split(" ", 1)
+            session.client.send(parts[0], [parts[1]] if len(parts) > 1 and parts[1] != "" else [])
+            return
+        session.client.send(address, payload)
+
+    def _listen_command(self, address: str, arguments: list, session: Session):
+        command = "listen" if address.startswith("/listen") else "ignore"
+        rest = address[len("/" + command):].strip("/")
+        wanted = self._broadcast_forms(rest)
+        if wanted is None:
+            return {"status": "error", "data": "evento show control sconosciuto", "discrete": False}
+        if command == "listen":
+            session.subscriptions |= wanted
+        else:
+            if rest == "":
+                session.subscriptions.clear()
+            else:
+                session.subscriptions -= wanted
+        return {"status": "ok", "data": "ok", "discrete": True}
+
+    @staticmethod
+    def _broadcast_forms(rest: str):
+        every = set()
+        for event in BROADCAST_CUE_EVENTS:
+            for form in BROADCAST_FORMS:
+                every.add((event, form))
+        for event in BROADCAST_NO_ARGUMENT_EVENTS.values():
+            every.add((event, "args"))
+        if rest == "":
+            return every
+        parts = rest.split("/")
+        detail = ""
+        if parts[-1] in BROADCAST_FORMS[1:]:
+            detail = parts[-1]
+            parts = parts[:-1]
+        event = "/".join(parts)
+        if event in BROADCAST_CUE_EVENTS:
+            if detail != "":
+                return {(event, detail)}
+            return {(event, form) for form in BROADCAST_FORMS}
+        if event in BROADCAST_NO_ARGUMENT_EVENTS.values() and detail == "":
+            return {(event, "args")}
+        return None
 
     def notify_workspace_changed(self, runtime: Runtime) -> None:
         self._push("/update/workspace/" + runtime.workspace.workspace_id, [])
@@ -307,6 +401,12 @@ class QLabApi:
             if len(arguments) > 0:
                 session.updates = to_bool(arguments[0])
             return {"status": "ok", "data": session.updates, "discrete": len(arguments) > 0}
+        if address == "/listen" or address.startswith("/listen/") or address == "/ignore" or address.startswith("/ignore/"):
+            return self._listen_command(address, arguments, session)
+        if address == "/eventFormat":
+            if len(arguments) > 0:
+                session.event_format = str(arguments[0])
+            return {"status": "ok", "data": session.event_format, "discrete": len(arguments) > 0}
         if address == "/thump":
             return {"status": "ok", "data": "thump", "discrete": False}
         if address.startswith("/overrides/"):
@@ -1003,8 +1103,7 @@ class QLabApi:
         elif head == "resume":
             runtime.resume_all()
         elif head == "stop":
-            for state in list(runtime.states.values()):
-                runtime.stop_cue(state.cue)
+            runtime.stop_all()
         elif head == "hardStop":
             runtime.hard_stop_all()
         elif head in ("panic", "panicInTime"):
