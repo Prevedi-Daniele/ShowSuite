@@ -280,3 +280,30 @@ def test_ignore_e_event_format():
     assert broadcast_messages(client) == []
     api.handle("/eventFormat", [], client)
     assert last_reply(client)[1]["data"] == "/cue/#data#/start"
+
+
+def test_settings_audio_patch_per_nome_e_id():
+    import json as json_module
+    workspace, runtime, api, client, cues = make_api()
+    workspace.patches["audio"] = [{"name": "Sala", "device": "", "first_channel": 3, "channels": 2}]
+    api.handle("/settings/audio/patch/Sala", [], client)
+    info = json_module.loads(last_reply(client)[1]["data"])
+    assert info["name"] == "Sala" and info["routing"] == [3, 4]
+    identifier = info["uniqueID"]
+    api.handle("/settings/audio/patchID/%s/cueOutputChannels" % identifier, [4], client)
+    api.handle("/settings/audio/patch/Sala/routing", [], client)
+    assert last_reply(client)[1]["data"] == [3, 4, 5, 6]
+    api.handle("/settings/audio/patch/Sala/mute/2", [True], client)
+    api.handle("/settings/audio/patch/Sala/mute/2", [], client)
+    assert last_reply(client)[1]["data"] == True
+    api.handle("/settings/audio/patch/Sala/muteChannels", [], client)
+    assert last_reply(client)[1]["data"] == [2]
+    api.handle("/settings/audio/patch/Sala/mute/clear", [], client)
+    assert workspace.patches["audio"][0]["mute"] == []
+    api.handle("/settings/audio/patch/Sala/level/1/2", ["off"], client)
+    api.handle("/settings/audio/patch/Sala/level/1/2", [], client)
+    assert last_reply(client)[1]["data"] == -200.0
+    api.handle("/settings/audio/patch/Sala/name", ["Platea"], client)
+    assert workspace.patches["audio"][0]["name"] == "Platea"
+    api.handle("/settings/audio/patch/Nessuna", [], client)
+    assert last_reply(client)[1]["status"] == "error"

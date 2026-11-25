@@ -183,9 +183,22 @@ class AudioMixer(ActionHandler):
                 continue
             if mute == False:
                 output += block
+        self._apply_output_mute_solo(output)
         low = db_to_gain(float(self.runtime.workspace.settings.get("min_volume", -60.0)))
         high = db_to_gain(float(self.runtime.workspace.settings.get("max_volume", 12.0)))
         return np.clip(output, -high * 4.0, high * 4.0).astype(np.float32)
+
+    def _apply_output_mute_solo(self, output: np.ndarray) -> None:
+        """Mute/solo delle uscite del dispositivo (numeri da 1) impostati nelle patch audio."""
+        muted = set()
+        soloed = set()
+        for entry in self.runtime.workspace.patches["audio"]:
+            muted.update(int(value) for value in entry.get("mute", []))
+            soloed.update(int(value) for value in entry.get("solo", []))
+        for channel in range(output.shape[1]):
+            number = channel + 1
+            if number in muted or (len(soloed) > 0 and number not in soloed):
+                output[:, channel] = 0.0
 
     def _render_voice(self, voice: Voice, frames: int):
         cue = voice.state.cue

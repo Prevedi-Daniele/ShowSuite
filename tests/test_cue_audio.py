@@ -121,3 +121,20 @@ def test_slice_con_loop_poi_devamp(tmp_path):
     runtime.devamp_cue(cue)
     render_offline(runtime, mixer, 4.0)
     assert runtime.is_active(cue) == False
+
+
+def test_mute_e_solo_delle_uscite_patch():
+    import numpy as np
+    from showsuite.cue.audio import AudioMixer
+    from showsuite.cue.engine import ManualClock, Runtime
+    from showsuite.cue.model import Workspace
+    workspace = Workspace("M")
+    workspace.patches["audio"] = [{"name": "A", "first_channel": 1, "channels": 2, "mute": [1], "solo": []}]
+    mixer = AudioMixer(Runtime(workspace, ManualClock()))
+    block = np.ones((4, 2), dtype=np.float32)
+    mixer._apply_output_mute_solo(block)
+    assert block[:, 0].sum() == 0 and block[:, 1].sum() == 4
+    workspace.patches["audio"][0].update({"mute": [], "solo": [2]})
+    block = np.ones((4, 2), dtype=np.float32)
+    mixer._apply_output_mute_solo(block)
+    assert block[:, 0].sum() == 0 and block[:, 1].sum() == 4

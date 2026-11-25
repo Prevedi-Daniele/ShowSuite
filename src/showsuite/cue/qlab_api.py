@@ -1237,6 +1237,102 @@ class QLabApi:
             return {"status": "ok", "data": "ok", "discrete": True}
         raise ApiError("comando sconosciuto")
 
+    @staticmethod
+    def ensure_patch_ids(runtime: Runtime) -> list:
+        import uuid
+        patches = runtime.workspace.patches["audio"]
+        for entry in patches:
+            if entry.get("unique_id", "") == "":
+                entry["unique_id"] = str(uuid.uuid4()).upper()
+        return patches
+
+    @staticmethod
+    def _patch_routing(entry: dict) -> list:
+        first = int(entry.get("first_channel", 1))
+        return list(range(first, first + int(entry.get("cue_outputs", entry.get("channels", 2)))))
+
+    def _audio_patch_setting(self, runtime: Runtime, tail: list, arguments: list, permissions: set) -> dict:
+        patches = self.ensure_patch_ids(runtime)
+        reference = tail[2]
+        entry = None
+        for candidate in patches:
+            if (tail[1] == "patch" and candidate.get("name", "") == reference) or \
+                    (tail[1] == "patchID" and candidate["unique_id"] == reference):
+                entry = candidate
+        if entry is None:
+            raise ApiError("patch audio non trovato")
+        rest = tail[3:]
+        ok = {"status": "ok", "data": "ok", "discrete": True}
+
+        def read(value):
+            return {"status": "ok", "data": value, "discrete": False}
+
+        def write_allowed():
+            self._need(permissions, "edit")
+
+        if rest == []:
+            return read(json.dumps({"name": entry.get("name", ""), "uniqueID": entry["unique_id"],
+                                    "routing": self._patch_routing(entry)}))
+        head = rest[0]
+        if head == "uniqueID":
+            return read(entry["unique_id"])
+        if head == "routing" and rest[1:] in ([], ["reset"]):
+            return ok if rest[1:] == ["reset"] else read(self._patch_routing(entry))
+        if head == "reset":
+            return ok
+        if head == "name":
+            if len(arguments) > 0:
+                write_allowed()
+                entry["name"] = str(arguments[0])
+                return ok
+            return read(entry.get("name", ""))
+        if head == "cueOutputChannels":
+            if len(arguments) > 0:
+                write_allowed()
+                count = int(to_float(arguments[0]))
+                if not 1 <= count <= 128:
+                    raise ApiError("cueOutputChannels deve essere da 1 a 128")
+                entry["cue_outputs"] = count
+                return ok
+            return read(int(entry.get("cue_outputs", entry.get("channels", 2))))
+        if head in ("mute", "solo"):
+            key = head
+            channels = entry.setdefault(key, [])
+            if rest[1:] == ["clear"]:
+                write_allowed()
+                channels.clear()
+                return ok
+            output = None
+            if len(rest) > 1:
+                output = int(to_float(rest[1]))
+                value_arguments = arguments
+            elif len(arguments) > 0:
+                output = int(to_float(arguments[0]))
+                value_arguments = arguments[1:]
+            else:
+                raise ApiError("manca il numero di uscita")
+            if len(value_arguments) > 0:
+                write_allowed()
+                if to_bool(value_arguments[0]) == True:
+                    if output not in channels:
+                        channels.append(output)
+                else:
+                    if output in channels:
+                        channels.remove(output)
+                return ok
+            return read(output in channels)
+        if head in ("muteChannels", "soloChannels"):
+            return read(sorted(entry.get(head[:4], [])))
+        if head == "level" and len(rest) >= 3:
+            levels = entry.setdefault("levels", {})
+            crosspoint = "%d/%d" % (int(to_float(rest[1])), int(to_float(rest[2])))
+            if len(arguments) > 0:
+                write_allowed()
+                levels[crosspoint] = -200.0 if isinstance(arguments[0], str) else to_float(arguments[0])
+                return ok
+            return read(levels.get(crosspoint, 0.0 if rest[1] == rest[2] else -200.0))
+        raise ApiError("impostazione sconosciuta: " + "/".join(tail))
+
     def _settings(self, runtime: Runtime, tail: list, arguments: list, permissions: set) -> dict:
         settings = runtime.workspace.settings
         key = "/".join(tail)
@@ -1263,6 +1359,10 @@ class QLabApi:
                 runtime.workspace.patches[patches[key]] = CONVERTERS["json"](arguments[0])
                 return {"status": "ok", "data": "ok", "discrete": True}
             return {"status": "ok", "data": json.dumps(runtime.workspace.patches[patches[key]]), "discrete": False}
+        if len(tail) >= 3 and tail[0] == "audio" and tail[1] in ("patch", "patchID"):
+            return self._audio_patch_setting(runtime, tail, arguments, permissions)
+        if key == "audio/patchList" or key == "audio/patchListFull":
+            pass
         if tail[-1:] in (["undo"], ["redo"]):
             self._need(permissions, "edit")
             getattr(runtime.workspace, tail[-1])()
