@@ -16,6 +16,7 @@ from ..cue.engine import ManualClock, Runtime, SystemClock
 from ..cue.model import (CONTINUE_AUTO_CONTINUE, CONTINUE_AUTO_FOLLOW, CONTINUE_NONE, COLORS, CUE_TYPES,
                          DuplicateNumberError, InvalidNumberError, TYPE_CART, TYPE_GROUP, Cue, Workspace)
 from ..cue.playback import INFINITE
+from ..cue.services import Services
 from ..cue.timeutil import format_time, parse_time
 
 CONTINUE_LABELS = ["—", "Auto-continue", "Auto-follow"]
@@ -493,10 +494,12 @@ class SettingsDialog(QDialog):
 
 
 class CueWindow(QMainWindow):
-    def __init__(self, workspace: Workspace | None = None, runtime: Runtime | None = None):
+    def __init__(self, workspace: Workspace | None = None, runtime: Runtime | None = None, services_options: dict | None = None):
         super().__init__()
         self.workspace = workspace if workspace is not None else Workspace()
         self.runtime = runtime if runtime is not None else Runtime(self.workspace, SystemClock(), check_files=True)
+        self.services_options = services_options if services_options is not None else {}
+        self.services = Services(self.runtime, **self.services_options)
         self.setWindowTitle("ShowSuite Cue")
         self.resize(1280, 760)
         self._items: dict = {}
@@ -688,10 +691,31 @@ class CueWindow(QMainWindow):
     # --- aggiornamento periodico ---
     def _tick(self) -> None:
         self.runtime.update()
+        self.services.tick()
         self.paint_states()
 
     def start_updates(self) -> None:
+        self.services.start()
         self.timer.start()
+
+    def closeEvent(self, event) -> None:
+        if hasattr(self, "timer") == True:
+            self.timer.stop()
+        if hasattr(self, "services") == True:
+            self.services.stop()
+        super().closeEvent(event)
+
+    def keyPressEvent(self, event) -> None:
+        sequence = QKeySequence(event.keyCombination()).toString()
+        if event.isAutoRepeat() == False and self.services.triggers.key_event(sequence, True):
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event) -> None:
+        if event.isAutoRepeat() == False:
+            self.services.triggers.key_event(QKeySequence(event.keyCombination()).toString(), False)
+        super().keyReleaseEvent(event)
 
     def paint_states(self) -> None:
         playhead = self.runtime.playhead()
@@ -897,9 +921,10 @@ class CueWindow(QMainWindow):
     def _replace_workspace(self, workspace: Workspace) -> None:
         self.runtime.hard_stop_all()
         self.workspace = workspace
-        handlers = dict(self.runtime.handlers)
+        self.services.stop()
         self.runtime = Runtime(workspace, self.runtime.clock, check_files=self.runtime.check_files)
-        self.runtime.handlers = handlers
+        self.services = Services(self.runtime, **self.services_options)
+        self.services.start()
         self.cart_view.runtime = self.runtime
         self.inspector.workspace = workspace
         self.inspector.load(None)
@@ -907,10 +932,21 @@ class CueWindow(QMainWindow):
         self.refresh_tree()
 
 
+def _real_midi_backend():
+    try:
+        from ..cue.outputs import MidoBackend
+        return MidoBackend()
+    except ImportError:
+        return None
+
+
 def main() -> int:
     application = QApplication(sys.argv)
-    window = CueWindow()
+    window = CueWindow(services_options={"osc_port": 53000, "use_audio_device": True, "live_network": True,
+                                         "midi_backend": _real_midi_backend()})
     window.start_updates()
+    for message in window.services.errors:
+        window.status_label.setText(message)
     window.show()
     return application.exec()
 
