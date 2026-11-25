@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 import os
 import random
+import threading
 import time
 
 from . import curves
@@ -223,6 +224,7 @@ class Runtime:
         self.log: list = []
         self.script_output: list[str] = []
         self.light_bridge = None
+        self.lock = threading.RLock()
         self.panic_timer = 0.0
         self._last_time = self.clock.now()
         self._last_go_time = -math.inf
@@ -1287,11 +1289,12 @@ class Runtime:
 
     # ------------------------------------------------------------------ avanzamento del tempo
     def update(self) -> None:
-        now = self.clock.now()
-        delta = now - self._last_time
-        self._last_time = now
-        if delta > 0:
-            self._advance_internal(delta)
+        with self.lock:
+            now = self.clock.now()
+            delta = now - self._last_time
+            self._last_time = now
+            if delta > 0:
+                self._advance_internal(delta)
 
     def advance(self, delta: float) -> None:
         """Con ManualClock fa avanzare l'orologio e il motore insieme (usato dai test)."""

@@ -1,0 +1,235 @@
+import json
+import socket
+import time
+
+import pytest
+
+from showsuite.cue.engine import ManualClock, Runtime
+from showsuite.cue.model import TYPE_AUDIO, TYPE_GROUP, TYPE_MEMO, TYPE_NETWORK, TYPE_WAIT, Workspace
+from showsuite.cue.osc import (Impulse, MemoryClient, OscServer, SlipDecoder, decode_packet, encode_message,
+                               parse_plain_text, pattern_matches, slip_encode)
+from showsuite.cue.qlab_api import QLabApi
+
+
+def test_codec_roundtrip():
+    data = encode_message("/cue/1/name", ["Ciao mondo", 3, 2.5, True, None, Impulse(), b"ab"])
+    address, arguments = decode_packet(data)[0]
+    assert address == "/cue/1/name"
+    assert arguments[0] == "Ciao mondo"
+    assert arguments[1] == 3
+    assert arguments[2] == pytest.approx(2.5)
+    assert arguments[3] is True and arguments[4] is None
+    assert isinstance(arguments[5], Impulse)
+    assert arguments[6] == b"ab"
+
+
+def test_bundle_e_slip():
+    first = encode_message("/a", [1])
+    second = encode_message("/b", ["x"])
+    bundle = b"#bundle\x00" + b"\x00" * 8 + len(first).to_bytes(4, "big") + first + len(second).to_bytes(4, "big") + second
+    assert [item[0] for item in decode_packet(bundle)] == ["/a", "/b"]
+    framed = slip_encode(bytes([0xC0, 0xDB, 1])) + slip_encode(b"xy")
+    decoder = SlipDecoder()
+    assert decoder.feed(framed[:3]) == []
+    assert decoder.feed(framed[3:]) == [bytes([0xC0, 0xDB, 1]), b"xy"]
+
+
+def test_pattern_osc():
+    assert pattern_matches("understudy-*", "understudy-12")
+    assert pattern_matches("?", "5") and not pattern_matches("?", "55")
+    assert pattern_matches("[1-3]", "2")
+    assert pattern_matches("{a,b}", "b")
+
+
+def test_testo_semplice():
+    assert parse_plain_text("/cue/1/name \"Hello world\"") == ("/cue/1/name", ["Hello world"])
+    assert parse_plain_text("/cue/1/preWait 2.5") == ("/cue/1/preWait", [2.5])
+
+
+def make_api():
+    workspace = Workspace("Show Demo")
+    workspace.settings["passcodes"] = [{"passcode": "", "view": True, "edit": True, "control": True}]
+    first = workspace.new_cue(TYPE_WAIT, name="Uno")
+    second = workspace.new_cue(TYPE_WAIT, name="Due")
+    first.duration = 5
+    second.duration = 5
+    runtime = Runtime(workspace, ManualClock())
+    api = QLabApi([runtime])
+    client = MemoryClient()
+    return workspace, runtime, api, client, (first, second)
+
+
+def last_reply(client):
+    address, arguments = client.messages[-1]
+    return address, json.loads(arguments[0])
+
+
+def test_lettura_scrittura_e_risposte_json():
+    workspace, runtime, api, client, cues = make_api()
+    api.handle("/cue/1/name", [], client)
+    address, payload = last_reply(client)
+    assert address == "/reply/cue/1/name"
+    assert payload["status"] == "ok" and payload["data"] == "Uno"
+    api.handle("/cue/1/name", ["Primo"], client)
+    assert cues[0].name == "Primo"
+    api.handle("/cue/1/preWait/+", [1.5], client)
+    api.handle("/cue/1/preWait/+", [1.5], client)
+    assert cues[0].pre_wait == 3.0
+    api.handle("/cue/zzz/name", [], client)
+    assert last_reply(client)[1]["status"] == "error"
+
+
+def test_azioni_go_panic_e_trasporto():
+    workspace, runtime, api, client, cues = make_api()
+    api.handle("/go", [], client)
+    assert runtime.is_running(cues[0]) == True
+    assert runtime.playhead() is cues[1]
+    api.handle("/cue/2/start", [], client)
+    assert runtime.is_running(cues[1]) == True
+    api.handle("/pause", [], client)
+    assert runtime.status(cues[0])["paused"] == True
+    api.handle("/resume", [], client)
+    api.handle("/workspace/%s/hardStop" % workspace.workspace_id, [], client)
+    assert runtime.active_cues() == []
+    api.handle("/playhead/1", [], client)
+    assert runtime.playhead() is cues[0]
+
+
+def test_wildcard_e_selected():
+    workspace, runtime, api, client, cues = make_api()
+    api.handle("/cue/*/armed", [0], client)
+    assert cues[0].armed == False and cues[1].armed == False
+    api.handle("/select/2", [], client)
+    api.handle("/cue/selected/colorName", ["green"], client)
+    assert cues[1].color == "green" and cues[0].color == "none"
+    api.handle("/cue/[*]/flagged", [1], client)
+    assert cues[0].flagged == True
+
+
+def test_live_non_modifica_il_documento():
+    workspace, runtime, api, client, cues = make_api()
+    audio = workspace.new_cue(TYPE_AUDIO)
+    api.handle("/cue/%s/rate/live" % audio.number, [2.0], client)
+    assert audio.params["rate"] == 1.0
+    assert runtime.get_param(audio, "rate") == 2.0
+    api.handle("/cue/%s/rate" % audio.number, [], client)
+    assert last_reply(client)[1]["data"] == 2.0 or last_reply(client)[1]["data"] == 1.0
+
+
+def test_permessi_passcode_e_connect():
+    workspace, runtime, api, client, cues = make_api()
+    workspace.settings["passcodes"] = [{"passcode": "", "view": False, "edit": False, "control": False},
+                                       {"passcode": "1234", "view": True, "edit": False, "control": True}]
+    api.handle("/cue/1/name", [], client)
+    assert last_reply(client)[1]["status"] == "denied"
+    api.handle("/workspace/%s/connect" % workspace.workspace_id, ["0000"], client)
+    assert last_reply(client)[1]["data"] == "badpass"
+    api.handle("/workspace/%s/connect" % workspace.workspace_id, ["1234"], client)
+    assert last_reply(client)[1]["data"] == "ok"
+    api.handle("/cue/1/name", [], client)
+    assert last_reply(client)[1]["data"] == "Uno"
+    api.handle("/cue/1/name", ["X"], client)
+    assert last_reply(client)[1]["status"] == "denied"
+    api.handle("/go", [], client)
+    assert runtime.is_running(cues[0]) == True
+
+
+def test_always_reply_e_reply_format():
+    workspace, runtime, api, client, cues = make_api()
+    api.handle("/go", [], client)
+    count = len(client.messages)
+    api.handle("/alwaysReply", [1], client)
+    api.handle("/cue/2/start", [], client)
+    assert len(client.messages) > count
+    api.handle("/replyFormat", ["#data# #address#"], client)
+    api.handle("/cue/1/colorName", [], client)
+    assert client.messages[-1][1][0] == "none /cue/1/colorName"
+
+
+def test_new_delete_renumber_e_liste_di_cue():
+    workspace, runtime, api, client, cues = make_api()
+    api.handle("/new", ["memo"], client)
+    identifier = last_reply(client)[1]["data"]
+    assert workspace.find_by_id(identifier).cue_type == TYPE_MEMO
+    api.handle("/cue_id/%s/number" % identifier, ["77"], client)
+    assert workspace.find_by_id(identifier).number == "77"
+    api.handle("/cue/77/number", ["1"], client)
+    assert last_reply(client)[1]["status"] == "error"
+    api.handle("/cueLists", [], client)
+    data = last_reply(client)[1]["data"]
+    assert data[0]["type"] == "Cue List" and len(data[0]["cues"]) == 3
+    api.handle("/delete/77", [], client)
+    assert workspace.find_by_number("77") is None
+
+
+def test_push_updates_playhead():
+    workspace, runtime, api, client, cues = make_api()
+    api.handle("/updates", [1], client)
+    api.handle("/go", [], client)
+    pushed = [message for message in client.messages if message[0].startswith("/update/")]
+    assert pushed[-1][0].endswith("/playbackPosition")
+    assert pushed[-1][1] == [cues[1].unique_id]
+
+
+def test_sessione_udp_scade_dopo_61_secondi():
+    workspace, runtime, api, client, cues = make_api()
+    now = [0.0]
+    api.monotonic = lambda: now[0]
+    client.transport = "udp"
+    api.handle("/alwaysReply", [1], client)
+    assert len(api.sessions) == 1
+    now[0] = 62.0
+    other = MemoryClient("altro")
+    other.transport = "udp"
+    api.handle("/version", [], other)
+    assert client.identity() not in api.sessions
+
+
+def test_query_per_network_cue():
+    workspace, runtime, api, client, cues = make_api()
+    api.handle("/select/2", [], client)
+    assert api.query("/cue/selected/number") == ["2"] or api.query("/cue/selected/number") == "2"
+
+
+def test_livello_e_geometria():
+    workspace, runtime, api, client, cues = make_api()
+    audio = workspace.new_cue(TYPE_AUDIO)
+    api.handle("/cue/%s/level/0/0" % audio.number, [-3.0], client)
+    assert audio.params["levels"]["main"] == -3.0
+    api.handle("/cue/%s/translation/x" % audio.number, [40], client)
+    assert audio.params["translation"][0] == 40.0
+    api.handle("/cue/%s/scale" % audio.number, [2, 3], client)
+    assert audio.params["scale"] == [2.0, 3.0]
+    api.handle("/cue/%s/addSliceMarker" % audio.number, [2.5, -1], client)
+    assert audio.params["slices"][0] == {"time": 2.5, "play_count": "inf"}
+
+
+def test_trasporto_reale_udp_tcp_e_testo():
+    workspace, runtime, api, client, cues = make_api()
+    server = OscServer(api.handle, host="127.0.0.1", port=0, reply_port=0, plain_port=0)
+    server.start()
+    try:
+        udp_port, tcp_port, plain_port = server.bound_ports()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(encode_message("/go", []), ("127.0.0.1", udp_port))
+        for _ in range(50):
+            if runtime.is_running(cues[0]):
+                break
+            time.sleep(0.02)
+        assert runtime.is_running(cues[0]) == True
+        sock.sendto(b"/cue/2/start", ("127.0.0.1", plain_port))
+        for _ in range(50):
+            if runtime.is_running(cues[1]):
+                break
+            time.sleep(0.02)
+        assert runtime.is_running(cues[1]) == True
+        tcp = socket.create_connection(("127.0.0.1", tcp_port))
+        tcp.sendall(slip_encode(encode_message("/cue/1/name", [])))
+        tcp.settimeout(2.0)
+        data = tcp.recv(4096)
+        address, arguments = decode_packet(SlipDecoder().feed(data)[0])[0]
+        assert address == "/reply/cue/1/name"
+        assert json.loads(arguments[0])["data"] == "Uno"
+        tcp.close()
+    finally:
+        server.stop()
