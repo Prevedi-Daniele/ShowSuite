@@ -1333,6 +1333,175 @@ class QLabApi:
             return read(levels.get(crosspoint, 0.0 if rest[1] == rest[2] else -200.0))
         raise ApiError("impostazione sconosciuta: " + "/".join(tail))
 
+    @staticmethod
+    def ensure_video_ids(runtime: Runtime) -> None:
+        import uuid
+        for kind in ("video_stage", "video_route"):
+            for entry in runtime.workspace.patches[kind]:
+                if entry.get("unique_id", "") == "":
+                    entry["unique_id"] = str(uuid.uuid4()).upper()
+        for stage in runtime.workspace.patches["video_stage"]:
+            for region in stage.get("regions", []):
+                if region.get("unique_id", "") == "":
+                    region["unique_id"] = str(uuid.uuid4()).upper()
+
+    @staticmethod
+    def _pick_item(items: list, kind: str, reference: str, label: str) -> dict:
+        """Seleziona per nome, per ID o per indice (da 0) un elemento di una lista di patch."""
+        for index, item in enumerate(items):
+            if kind.endswith("ID") and item.get("unique_id") == reference:
+                return item
+            if kind.endswith("Index") and str(index) == reference:
+                return item
+            if kind in ("stage", "route", "region") and item.get("name") == reference:
+                return item
+        raise ApiError(label + " non trovato")
+
+    def _video_setting(self, runtime: Runtime, tail: list, arguments: list, permissions: set) -> dict:
+        self.ensure_video_ids(runtime)
+        ok = {"status": "ok", "data": "ok", "discrete": True}
+        patches = runtime.workspace.patches
+
+        def read(value):
+            return {"status": "ok", "data": value, "discrete": False}
+
+        if tail[1].startswith("route"):
+            route = self._pick_item(patches["video_route"], tail[1], tail[2], "route video")
+            rest = tail[3:]
+            if rest == []:
+                return read(json.dumps({"enableGuides": route.get("enable_guides", False), "name": route.get("name", ""),
+                                        "uniqueID": route["unique_id"], "rotationDegrees": route.get("rotation", 0),
+                                        "scalingMode": route.get("scaling_mode", 0), "rear": route.get("rear", False)}))
+            if rest == ["uniqueID"]:
+                return read(route["unique_id"])
+            if rest == ["enableGuides"]:
+                if len(arguments) > 0:
+                    self._need(permissions, "edit")
+                    route["enable_guides"] = to_bool(arguments[0])
+                    return ok
+                return read(route.get("enable_guides", False))
+            raise ApiError("impostazione sconosciuta: " + "/".join(tail))
+        stage = self._pick_item(patches["video_stage"], tail[1], tail[2], "stage")
+        stage_height = int(stage.get("height", 1080))
+        stage_width = int(stage.get("width", 1920))
+        rest = tail[3:]
+        if rest == []:
+            return read(json.dumps(self._stage_json(stage)))
+        if rest == ["uniqueID"]:
+            return read(stage["unique_id"])
+        if rest == ["name"]:
+            if len(arguments) > 0:
+                self._need(permissions, "edit")
+                stage["name"] = str(arguments[0])
+                return ok
+            return read(stage.get("name", ""))
+        if rest == ["regions"]:
+            return read(json.dumps([self._region_json(region, stage_height) for region in stage.get("regions", [])]))
+        if rest[0] == "size":
+            size = {"width": stage_width, "height": stage_height}
+            if rest == ["size"]:
+                return read(json.dumps(size))
+            if len(rest) == 2 and rest[1] in size:
+                return read(size[rest[1]])
+        if rest[0] in ("region", "regionID", "regionIndex") and len(rest) >= 2:
+            region = self._pick_item(stage.get("regions", []), rest[0], rest[1], "regione")
+            return self._region_setting(region, rest[2:], arguments, permissions, stage_width, stage_height)
+        raise ApiError("impostazione sconosciuta: " + "/".join(tail))
+
+    @staticmethod
+    def _bounds_api(region: dict, stage_height: int) -> dict:
+        x, y, width, height = [int(value) for value in region.get("bounds", [0, 0, 0, 0])]
+        return {"x": x, "y": stage_height - y - height, "width": width, "height": height}
+
+    def _region_json(self, region: dict, stage_height: int) -> dict:
+        return {"name": region.get("name", ""), "uniqueID": region["unique_id"],
+                "boundsOnStage": self._bounds_api(region, stage_height), "meshWidth": 2, "meshHeight": 2,
+                "warpType": 0, "controlPoints": region.get("control_points_list", [])}
+
+    def _stage_json(self, stage: dict) -> dict:
+        height = int(stage.get("height", 1080))
+        return {"uniqueID": stage["unique_id"], "name": stage.get("name", ""), "width": int(stage.get("width", 1920)),
+                "height": height, "regions": [self._region_json(region, height) for region in stage.get("regions", [])]}
+
+    def _region_setting(self, region: dict, rest: list, arguments: list, permissions: set, stage_width: int,
+                        stage_height: int) -> dict:
+        ok = {"status": "ok", "data": "ok", "discrete": True}
+
+        def read(value):
+            return {"status": "ok", "data": value, "discrete": False}
+
+        if rest == []:
+            return read(json.dumps(self._region_json(region, stage_height)))
+        if rest == ["enableGrid"] or rest == ["enableGuide"]:
+            key = "enable_grid" if rest == ["enableGrid"] else "enable_guide"
+            if len(arguments) > 0:
+                self._need(permissions, "edit")
+                region[key] = to_bool(arguments[0])
+                return ok
+            return read(region.get(key, False))
+        if rest == ["resetControlPoints"]:
+            self._need(permissions, "edit")
+            region.pop("warp", None)
+            region.pop("control_points", None)
+            return ok
+        if rest[0] == "subregionIndex" and len(rest) == 4 and rest[2] == "controlPointIndex":
+            points = region.setdefault("control_points", {})
+            key = "%s/%s" % (rest[1], rest[3])
+            if len(arguments) >= 2:
+                self._need(permissions, "edit")
+                points[key] = [to_float(arguments[0]), to_float(arguments[1])]
+                return ok
+            return read(json.dumps(points.get(key, [0.0, 0.0])))
+        if rest[0] == "bounds":
+            current = self._bounds_api(region, stage_height)
+            part = rest[1:]
+            if len(arguments) == 0:
+                if part == []:
+                    return read(json.dumps(current))
+                if part == ["origin"]:
+                    return read(json.dumps({"x": current["x"], "y": current["y"]}))
+                if part == ["size"]:
+                    return read(json.dumps({"width": current["width"], "height": current["height"]}))
+                if len(part) == 1 and part[0] in current:
+                    return read(current[part[0]])
+                if len(part) == 2 and part[1] in current:
+                    return read(current[part[1]])
+                raise ApiError("impostazione sconosciuta: bounds/" + "/".join(part))
+            self._need(permissions, "edit")
+            numbers = self._parse_bounds_arguments(arguments)
+            if part == []:
+                current.update(zip(("x", "y", "width", "height"), numbers))
+            elif part == ["origin"]:
+                current["x"], current["y"] = numbers[0], numbers[1]
+            elif part == ["size"]:
+                current["width"], current["height"] = numbers[0], numbers[1]
+            elif len(part) == 2 and part[1] in current:
+                current[part[1]] = numbers[0]
+            else:
+                raise ApiError("impostazione sconosciuta: bounds/" + "/".join(part))
+            if current["x"] < 0 or current["y"] < 0 or current["width"] <= 0 or current["height"] <= 0 or \
+                    current["x"] + current["width"] > stage_width or current["y"] + current["height"] > stage_height:
+                raise ApiError("la regione deve stare dentro lo stage")
+            region["bounds"] = [current["x"], stage_height - current["y"] - current["height"], current["width"],
+                                current["height"]]
+            return ok
+        raise ApiError("impostazione sconosciuta: " + "/".join(rest))
+
+    @staticmethod
+    def _parse_bounds_arguments(arguments: list) -> list:
+        if len(arguments) == 1 and isinstance(arguments[0], str):
+            found = re.findall(r"-?\d+", arguments[0])
+            if len(found) not in (1, 2, 4):
+                raise ApiError("formato dei bounds non valido")
+            return [int(value) for value in found]
+        values = []
+        for value in arguments:
+            number = to_float(value)
+            if number != int(number):
+                raise ApiError("i valori devono essere interi")
+            values.append(int(number))
+        return values
+
     def _settings(self, runtime: Runtime, tail: list, arguments: list, permissions: set) -> dict:
         settings = runtime.workspace.settings
         key = "/".join(tail)
@@ -1361,8 +1530,8 @@ class QLabApi:
             return {"status": "ok", "data": json.dumps(runtime.workspace.patches[patches[key]]), "discrete": False}
         if len(tail) >= 3 and tail[0] == "audio" and tail[1] in ("patch", "patchID"):
             return self._audio_patch_setting(runtime, tail, arguments, permissions)
-        if key == "audio/patchList" or key == "audio/patchListFull":
-            pass
+        if len(tail) >= 3 and tail[0] == "video" and tail[1] in ("stage", "stageID", "route", "routeID", "routeIndex"):
+            return self._video_setting(runtime, tail, arguments, permissions)
         if tail[-1:] in (["undo"], ["redo"]):
             self._need(permissions, "edit")
             getattr(runtime.workspace, tail[-1])()

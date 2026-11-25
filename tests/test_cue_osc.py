@@ -307,3 +307,32 @@ def test_settings_audio_patch_per_nome_e_id():
     assert workspace.patches["audio"][0]["name"] == "Platea"
     api.handle("/settings/audio/patch/Nessuna", [], client)
     assert last_reply(client)[1]["status"] == "error"
+
+
+def test_settings_video_stage_regioni_e_route():
+    import json as json_module
+    workspace, runtime, api, client, cues = make_api()
+    workspace.patches["video_stage"] = [{"name": "Main", "width": 400, "height": 200,
+                                         "regions": [{"name": "Sx", "bounds": [0, 0, 200, 100]}]}]
+    workspace.patches["video_route"] = [{"name": "Proiettore", "stage": 1, "region": "Sx"}]
+    api.handle("/settings/video/stage/Main/size/width", [], client)
+    assert last_reply(client)[1]["data"] == 400
+    api.handle("/settings/video/stage/Main/region/Sx/bounds", [], client)
+    bounds = json_module.loads(last_reply(client)[1]["data"])
+    assert bounds == {"x": 0, "y": 100, "width": 200, "height": 100}
+    api.handle("/settings/video/stage/Main/region/Sx/bounds", [10, 20, 100, 50], client)
+    assert workspace.patches["video_stage"][0]["regions"][0]["bounds"] == [10, 130, 100, 50]
+    api.handle("/settings/video/stage/Main/regionIndex/0/bounds", ["{{5,5}{50,40}}"], client)
+    assert workspace.patches["video_stage"][0]["regions"][0]["bounds"] == [5, 155, 50, 40]
+    api.handle("/settings/video/stage/Main/region/Sx/bounds/size/width", [500], client)
+    assert last_reply(client)[1]["status"] == "error"
+    api.handle("/settings/video/stage/Main/name", ["Palco"], client)
+    api.handle("/settings/video/stage/Palco/uniqueID", [], client)
+    stage_id = last_reply(client)[1]["data"]
+    api.handle("/settings/video/stageID/%s/regions" % stage_id, [], client)
+    assert json_module.loads(last_reply(client)[1]["data"])[0]["name"] == "Sx"
+    api.handle("/settings/video/routeIndex/0/enableGuides", [True], client)
+    api.handle("/settings/video/route/Proiettore/enableGuides", [], client)
+    assert last_reply(client)[1]["data"] == True
+    api.handle("/settings/video/route/Nessuna", [], client)
+    assert last_reply(client)[1]["status"] == "error"
