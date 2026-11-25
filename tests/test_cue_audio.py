@@ -138,3 +138,24 @@ def test_mute_e_solo_delle_uscite_patch():
     block = np.ones((4, 2), dtype=np.float32)
     mixer._apply_output_mute_solo(block)
     assert block[:, 0].sum() == 0 and block[:, 1].sum() == 4
+
+
+def test_object_audio_instrada_un_oggetto_sulle_uscite_della_mappa(tmp_path):
+    from showsuite.cue import audiomap
+    workspace, runtime, mixer, cue = make(tmp_path, channels=1)
+    audio_map = audiomap.new_map("Sala", 1000, 1000)
+    audiomap.add_mark(audio_map, "L", 0, 500, {1: 0.0})
+    audiomap.add_mark(audio_map, "R", 1000, 500, {2: 0.0})
+    audiomap.add_object(audio_map, "Radio", 1000, 500)
+    workspace.patches["audio_map"] = [audio_map]
+    cue.params.update({"audio_map": "Sala", "objects": [{"channel": 1, "map_object": "Radio"}]})
+    runtime.start_cue(cue)
+    audio = render_offline(runtime, mixer, 0.2)
+    assert audio[100, 1] == pytest.approx(0.5, abs=1e-3) and audio[100, 0] == pytest.approx(0.0, abs=1e-3)
+    audio_map["objects"][0]["x"] = 0.0
+    runtime2 = Runtime(workspace, ManualClock())
+    mixer2 = AudioMixer(runtime2, sample_rate=RATE, output_channels=4, block_size=400)
+    mixer2.install()
+    runtime2.start_cue(cue)
+    audio2 = render_offline(runtime2, mixer2, 0.2)
+    assert audio2[100, 0] == pytest.approx(0.5, abs=1e-3) and audio2[100, 1] == pytest.approx(0.0, abs=1e-3)

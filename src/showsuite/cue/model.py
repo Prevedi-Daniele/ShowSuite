@@ -92,7 +92,7 @@ def geometry_defaults() -> dict:
 
 
 def audio_defaults() -> dict:
-    return {"audio_output_patch": 1, "levels": {}, "trim": 0.0, "audio_fx": [], "start_time": 0.0, "end_time": None,
+    return {"audio_output_patch": 1, "audio_map": "", "objects": [], "levels": {}, "trim": 0.0, "audio_fx": [], "start_time": 0.0, "end_time": None,
             "play_count": 1, "infinite_loop": False, "slices": [], "rate": 1.0, "preserve_pitch": False,
             "integrated_fade": {"enabled": False, "curve": "custom", "lock_to_cue": False, "points": []},
             "media_duration": None, "media_channels": 2, "media_sample_rate": 48000, "mute": False, "solo": False}

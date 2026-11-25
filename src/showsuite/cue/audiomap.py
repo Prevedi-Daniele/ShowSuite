@@ -130,7 +130,7 @@ def _point_gains(audio_map: dict, x: float, y: float, outputs: list) -> dict:
 def object_levels(audio_map: dict, x: float, y: float, spread: float = 0.0, outputs: list | None = None) -> dict:
     """Livelli (dB) di un oggetto in {uscita: dB}. Con spread > 0 vale il punto più forte entro il raggio."""
     if outputs is None:
-        used = {0}
+        used = set()
         for mark in audio_map["marks"]:
             used.update(mark["levels"].keys())
         outputs = sorted(used)
