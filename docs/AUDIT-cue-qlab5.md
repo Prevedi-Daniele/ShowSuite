@@ -11,20 +11,12 @@ Data: 2026-11-25. Test: 314 verdi. Nessuna funzione di questo documento è stata
 - **Altri capitoli**: NON letti riga per riga. Il giudizio si basa sui titoli di sezione del manuale e sul codice. Va considerato
   una stima, non una verifica.
 
-## Copertura OSC (gestiti / totale)
-| Gruppo | Copertura |
-|---|---|
-| `/workspace` | 80/80 |
-| `/overrides` | 13/13 |
-| `/settings/general` | 2/2 |
-| `/cue` | 358/623 (limite inferiore) |
-| `/settings/audio` | 0/199 |
-| `/settings/video` | 0/95 |
-| `/qlab/event` (show control broadcast) | 0/20 |
-| `/update` | 0/4 (le notifiche `/update/...` sono inviate dal server, ma non sono indirizzi ricevibili: il test non è applicabile) |
-| comandi di sessione (`/alwaysReply`, `/replyFormat`, `/updates`, `/forgetMeNot`, `/udpKeepAlive`) | 5/5 |
-| `/udpReplyPort`, `/workingDirectory`, `/overrideWindow`, `/timecodeWindow` | 0/4 |
-| **Totale** | **459/1047 (44%)** |
+## Copertura OSC (aggiornata a fine giornata: 849/1047, 81%)
+Stessa misura automatica di prima (indirizzo "gestito" = non risponde "sconosciuto"; errori di valore/permesso contano come gestiti).
+Partenza: 459/1047 (44%). Aggiunti oggi: show control broadcast, patch audio, impostazioni video, audio map, object audio per cue.
+Ancora non riconosciuti: 198 (elenco in `docs/osc_non_riconosciuti.txt`): `/cue/.../` per slice marker, playlist, mute/solo per canale/oggetto,
+effetti video, `liveAverageLevel`, `rotate`, `gang`, `*PatchID/Name/Number`, `objectLevel(s)`, `/update/...`, `/workingDirectory`, `/udpReplyPort`,
+`/overrideWindow`, `/timecodeWindow`.
 
 ## Fatto (e coperto da test)
 Modello workspace/liste/cart/cue; numerazione; pre-wait/durata/post-wait; continue; armed; colori; second trigger; GO e playhead;
@@ -36,9 +28,8 @@ trigger hotkey/MIDI/MSC/wall clock/timecode; audio (matrice, slice/loop, rate, e
 video compositor (stage/regioni/route, maschere, edge blend, warp a 4 angoli, layer, testo); ponte Cue↔Light.
 
 ## Manca
-- **Audio Map / object audio (5.2, 5.6)**: assente dal modello (oggetti, filtri, marker, mappe). Causa 69+ indirizzi `/cue/.../audioMap` e gran parte di `/settings/audio` (199).
-- **Impostazioni OSC di patch audio/video** (`/settings/audio`, `/settings/video`): solo lettura parziale via `patches`, nessuna scrittura per indirizzo.
-- **Show control broadcast `/qlab/event/...` (8.7)** non emesso.
+- **Audio Map / object audio**: modello, indirizzi e instradamento fatti, ma con algoritmo APPROSSIMATO (QLab non pubblica la formula di gravity/shadow/filtri): i livelli intermedi non coincidono con QLab. Mancano Audio Map Editor grafico, heatmap, test object reale (solo stato), fade degli oggetti con Fade cue.
+- **Show control broadcast MSC (8.7)**: la parte OSC è fatta, l'invio MSC ai dispositivi MIDI no.
 - Liste di OSC `/cue/.../` mancanti per tutti i tipi: marker di slice (`sliceMarker`, `addSliceMarker`...), `playlist`, `mute/solo` per canale/oggetto,
   `liveAverageLevel`, `videoEffect*`, `rotate`, `gang`, `expand/collapse`, `tempDuration`, `soloCueInTime`, `fadeEntries`, `parameterValue(s)`,
   `valuesForKeysWithArguments`, `surface*`/`stage*`, `*PatchID/Name/Number`.

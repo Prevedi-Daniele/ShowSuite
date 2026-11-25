@@ -543,6 +543,8 @@ class QLabApi:
             working = working[:-1]
         name = working[0]
         subpath = working[1:]
+        if name in ("audioMap", "audioMapID", "audioMapName", "audioMapNumber", "object", "objectID", "objects"):
+            return self._cue_object_audio(runtime, cues, parts, arguments, permissions, plural)
         if name in ACTIONS:
             self._need(permissions, "control")
             for cue in cues:
@@ -1378,6 +1380,81 @@ class QLabApi:
             return results[0] if len(results) == 1 else {"status": "ok", "data": [item["data"] for item in results],
                                                           "discrete": results[0]["discrete"]}
         raise ApiError("impostazione sconosciuta: " + "/".join(tail))
+
+    def _cue_object_audio(self, runtime: Runtime, cues: list, parts: list, arguments: list, permissions: set,
+                          plural: bool) -> dict:
+        """Proprietà di object audio di un cue: mappa in uso (audioMap*) e oggetti propri del cue (object*)."""
+        from . import audiomap
+        name = parts[0]
+        maps = runtime.workspace.patches.setdefault("audio_map", [])
+        collected = []
+        for cue in cues:
+            if cue.cue_type != "audio":
+                raise ApiError("il cue non è di tipo Audio")
+            if name in ("audioMapID", "audioMapName", "audioMapNumber"):
+                reply = self._cue_map_reference(cue, maps, name, arguments, permissions)
+            elif name == "audioMap":
+                found = audiomap.find_map(maps, cue.params.get("audio_map", ""))
+                if found is None:
+                    raise ApiError("il cue non usa nessuna audio map")
+                reply = self._audio_map_setting(runtime, ["audio", "mapID", found["unique_id"]] + parts[1:], arguments,
+                                                permissions)
+            else:
+                reply = self._cue_own_objects(cue, parts, arguments, permissions)
+            collected.append(reply)
+        if len(collected) == 1 or plural == False:
+            return collected[0]
+        return {"status": "ok", "data": [item["data"] for item in collected], "discrete": collected[0]["discrete"]}
+
+    def _cue_map_reference(self, cue: Cue, maps: list, name: str, arguments: list, permissions: set) -> dict:
+        current = None
+        for audio_map in maps:
+            if audio_map["unique_id"] == cue.params.get("audio_map", "") or audio_map["name"] == cue.params.get("audio_map", ""):
+                current = audio_map
+        if len(arguments) == 0:
+            if name == "audioMapID":
+                return {"status": "ok", "data": current["unique_id"] if current else "", "discrete": False}
+            if name == "audioMapName":
+                return {"status": "ok", "data": current["name"] if current else "", "discrete": False}
+            return {"status": "ok", "data": maps.index(current) + 1 if current else 0, "discrete": False}
+        self._need(permissions, "edit")
+        value = arguments[0]
+        chosen = ""
+        if name == "audioMapNumber":
+            index = int(to_float(value))
+            if index != 0:
+                if not 1 <= index <= len(maps):
+                    raise ApiError("audio map non trovata")
+                chosen = maps[index - 1]["unique_id"]
+        elif str(value) not in ("", "none"):
+            key = "unique_id" if name == "audioMapID" else "name"
+            matches = [audio_map for audio_map in maps if audio_map[key] == str(value)]
+            if len(matches) == 0:
+                raise ApiError("audio map non trovata")
+            chosen = matches[0]["unique_id"]
+        cue.params["audio_map"] = chosen
+        return {"status": "ok", "data": "ok", "discrete": True}
+
+    def _cue_own_objects(self, cue: Cue, parts: list, arguments: list, permissions: set) -> dict:
+        import uuid
+        objects = cue.params.setdefault("objects", [])
+        for index, entry in enumerate(objects):
+            entry.setdefault("unique_id", str(uuid.uuid4()).upper())
+            entry.setdefault("name", chr(ord("A") + index % 26) * (index // 26 + 1))
+            entry.setdefault("x", 0.0)
+            entry.setdefault("y", 0.0)
+            entry.setdefault("spread", 0.0)
+            entry.setdefault("color", "none")
+        if parts == ["objects"]:
+            return {"status": "ok", "data": json.dumps([self._map_item_json(entry, "objects") for entry in objects]),
+                    "discrete": False}
+        if len(parts) < 2 or parts[0] not in ("object", "objectID"):
+            raise ApiError("proprietà sconosciuta: " + "/".join(parts))
+        items = self._match_map_items(objects, parts[0], parts[1])
+        if len(items) == 0:
+            raise ApiError("oggetto non trovato")
+        return self._map_item_property({"width": 1000.0, "height": 1000.0}, "objects", items[0], parts[2:], arguments,
+                                       permissions)
 
     @staticmethod
     def _match_map_items(items: list, kind: str, reference: str) -> list:

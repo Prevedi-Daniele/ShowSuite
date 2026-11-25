@@ -371,3 +371,33 @@ def test_settings_audio_map_marks_filtri_oggetti():
     api.handle("/settings/audio/map/Sala/testObject/start", [], client)
     api.handle("/settings/audio/map/Sala/testObject/running", [], client)
     assert last_reply(client)[1]["data"] == True
+
+
+def test_cue_audio_map_e_oggetti_propri():
+    import json as json_module
+    from showsuite.cue import audiomap
+    from showsuite.cue.model import TYPE_AUDIO
+    workspace, runtime, api, client, cues = make_api()
+    audio_cue = workspace.new_cue(TYPE_AUDIO)
+    audio_cue.number = "9"
+    audio_map = audiomap.new_map("Sala", 1000, 1000)
+    audiomap.add_mark(audio_map, "L", 0, 0, {1: 0.0})
+    workspace.patches["audio_map"] = [audio_map]
+    api.handle("/cue/9/audioMapName", ["Sala"], client)
+    api.handle("/cue/9/audioMapNumber", [], client)
+    assert last_reply(client)[1]["data"] == 1
+    api.handle("/cue/9/audioMap/mark/L/gravity", [2], client)
+    assert audio_map["marks"][0]["gravity"] == 2.0
+    api.handle("/cue/9/audioMap/size/width", [], client)
+    assert last_reply(client)[1]["data"] == 1000.0
+    audio_cue.params["objects"] = [{"channel": 1}]
+    api.handle("/cue/9/objects", [], client)
+    listed = json_module.loads(last_reply(client)[1]["data"])
+    assert listed[0]["name"] == "A"
+    api.handle("/cue/9/object/A/position", [5, 6], client)
+    api.handle("/cue/9/object/A/position/x", [], client)
+    assert last_reply(client)[1]["data"] == 5.0
+    api.handle("/cue/9/audioMapID", ["none"], client)
+    assert audio_cue.params["audio_map"] == ""
+    api.handle("/cue/9/audioMap", [], client)
+    assert last_reply(client)[1]["status"] == "error"
