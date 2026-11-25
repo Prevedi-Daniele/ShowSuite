@@ -336,3 +336,38 @@ def test_settings_video_stage_regioni_e_route():
     assert last_reply(client)[1]["data"] == True
     api.handle("/settings/video/route/Nessuna", [], client)
     assert last_reply(client)[1]["status"] == "error"
+
+
+def test_settings_audio_map_marks_filtri_oggetti():
+    import json as json_module
+    from showsuite.cue import audiomap
+    workspace, runtime, api, client, cues = make_api()
+    audio_map = audiomap.new_map("Sala", 1000, 800)
+    audiomap.add_mark(audio_map, "L", 0, 400, {1: 0.0})
+    audiomap.add_filter(audio_map, "Muro", 500, 0)
+    audiomap.add_object(audio_map)
+    workspace.patches["audio_map"] = [audio_map]
+    api.handle("/settings/audio/map/Sala/size/height", [], client)
+    assert last_reply(client)[1]["data"] == 800
+    api.handle("/settings/audio/map/Sala/mark/L/gravity", [3], client)
+    assert audio_map["marks"][0]["gravity"] == 3.0
+    api.handle("/settings/audio/map/Sala/mark/L/gravity", [9], client)
+    assert last_reply(client)[1]["status"] == "error"
+    api.handle("/settings/audio/map/Sala/mark/L/level/2", [-6], client)
+    api.handle("/settings/audio/map/Sala/mark/*/levels", [], client)
+    assert last_reply(client)[1]["data"][2] == -6
+    api.handle("/settings/audio/map/Sala/filter/Muro/passthrough/3", [True], client)
+    api.handle("/settings/audio/map/Sala/filter/Muro/passthroughs", [], client)
+    assert last_reply(client)[1]["data"][2] == True
+    api.handle("/settings/audio/map/Sala/object/A/position/live", [10, 20], client)
+    assert (audio_map["objects"][0]["x"], audio_map["objects"][0]["y"]) == (10.0, 20.0)
+    api.handle("/settings/audio/map/Sala/object/A/colorName", ["blue"], client)
+    api.handle("/settings/audio/map/Sala/object/A/colorName", ["inesistente"], client)
+    assert last_reply(client)[1]["status"] == "error"
+    api.handle("/settings/audio/map/Sala/uniqueID", [], client)
+    identifier = last_reply(client)[1]["data"]
+    api.handle("/settings/audio/mapID/%s/objects" % identifier, [], client)
+    assert json_module.loads(last_reply(client)[1]["data"])[0]["colorName"] == "blue"
+    api.handle("/settings/audio/map/Sala/testObject/start", [], client)
+    api.handle("/settings/audio/map/Sala/testObject/running", [], client)
+    assert last_reply(client)[1]["data"] == True

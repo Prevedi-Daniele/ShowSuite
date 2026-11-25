@@ -1333,6 +1333,197 @@ class QLabApi:
             return read(levels.get(crosspoint, 0.0 if rest[1] == rest[2] else -200.0))
         raise ApiError("impostazione sconosciuta: " + "/".join(tail))
 
+    # ------------------------------------------------------------------ audio map (manuale 5.6, dizionario 9.1)
+    def _audio_map_setting(self, runtime: Runtime, tail: list, arguments: list, permissions: set) -> dict:
+        from . import audiomap
+        maps = runtime.workspace.patches.setdefault("audio_map", [])
+        reference = tail[2]
+        audio_map = None
+        for candidate in maps:
+            if (tail[1] == "map" and candidate["name"] == reference) or \
+                    (tail[1] == "mapID" and candidate["unique_id"] == reference):
+                audio_map = candidate
+        if audio_map is None:
+            raise ApiError("audio map non trovata")
+        ok = {"status": "ok", "data": "ok", "discrete": True}
+        rest = tail[3:]
+
+        def read(value):
+            return {"status": "ok", "data": value, "discrete": False}
+
+        if rest == []:
+            return read(json.dumps(self._map_json(audio_map)))
+        if rest == ["uniqueID"]:
+            return read(audio_map["unique_id"])
+        if rest[0] == "size":
+            size = {"width": audio_map["width"], "height": audio_map["height"]}
+            if rest == ["size"]:
+                return read(json.dumps(size))
+            if len(rest) == 2 and rest[1] in size:
+                return read(size[rest[1]])
+        for collection, key in (("filters", "filters"), ("marks", "marks"), ("objects", "objects")):
+            if rest == [collection]:
+                return read(json.dumps([self._map_item_json(item, key) for item in audio_map[key]]))
+        if rest[0] == "testObject":
+            return self._test_object(audio_map, rest[1:], arguments, permissions)
+        kinds = {"filter": "filters", "filterID": "filters", "mark": "marks", "markID": "marks",
+                 "object": "objects", "objectID": "objects"}
+        if rest[0] in kinds and len(rest) >= 2:
+            collection = kinds[rest[0]]
+            items = self._match_map_items(audio_map[collection], rest[0], rest[1])
+            if len(items) == 0:
+                raise ApiError("elemento non trovato")
+            results = [self._map_item_property(audio_map, collection, item, rest[2:], arguments, permissions)
+                       for item in items]
+            return results[0] if len(results) == 1 else {"status": "ok", "data": [item["data"] for item in results],
+                                                          "discrete": results[0]["discrete"]}
+        raise ApiError("impostazione sconosciuta: " + "/".join(tail))
+
+    @staticmethod
+    def _match_map_items(items: list, kind: str, reference: str) -> list:
+        if kind.endswith("ID"):
+            return [item for item in items if item["unique_id"] == reference]
+        return [item for item in items if pattern_matches(reference, item["name"])]
+
+    @staticmethod
+    def _levels_list(mark: dict) -> list:
+        return [mark["levels"].get(output, -200.0) for output in range(0, 129)]
+
+    def _map_item_json(self, item: dict, collection: str) -> dict:
+        data = {"name": item["name"], "uniqueID": item["unique_id"], "x": item["x"], "y": item["y"]}
+        if collection == "marks":
+            data.update({"gravity": item["gravity"], "shadow": item["shadow"], "levels": self._levels_list(item)})
+        elif collection == "filters":
+            data.update({"angle": item["angle"], "width": item["width"],
+                         "passthroughs": [output in item["passthroughs"] for output in range(1, 129)]})
+        else:
+            data.update({"spread": item["spread"], "colorName": item["color"]})
+        return data
+
+    def _map_json(self, audio_map: dict) -> dict:
+        return {"uniqueID": audio_map["unique_id"], "name": audio_map["name"], "width": audio_map["width"],
+                "height": audio_map["height"],
+                "filters": [self._map_item_json(item, "filters") for item in audio_map["filters"]],
+                "marks": [self._map_item_json(item, "marks") for item in audio_map["marks"]],
+                "objects": [self._map_item_json(item, "objects") for item in audio_map["objects"]]}
+
+    def _map_item_property(self, audio_map: dict, collection: str, item: dict, rest: list, arguments: list,
+                           permissions: set) -> dict:
+        ok = {"status": "ok", "data": "ok", "discrete": True}
+
+        def read(value):
+            return {"status": "ok", "data": value, "discrete": False}
+
+        if len(rest) > 0 and rest[-1] == "live":
+            rest = rest[:-1]
+        if rest == []:
+            return read(json.dumps(self._map_item_json(item, collection)))
+        head = rest[0]
+        if head == "uniqueID":
+            return read(item["unique_id"])
+        writing = len(arguments) > 0
+        if writing == True:
+            self._need(permissions, "edit")
+        if head == "name":
+            if writing == True:
+                item["name"] = str(arguments[0])
+                return ok
+            return read(item["name"])
+        if head == "position":
+            if rest == ["position"]:
+                if writing == True:
+                    item["x"], item["y"] = to_float(arguments[0]), to_float(arguments[1])
+                    return ok
+                return read([item["x"], item["y"]])
+            if len(rest) == 2 and rest[1] in ("x", "y"):
+                if writing == True:
+                    item[rest[1]] = to_float(arguments[0])
+                    return ok
+                return read(item[rest[1]])
+        ranges = {("marks", "gravity"): (0.1, 5.0), ("marks", "shadow"): (0.0, 90.0),
+                  ("filters", "angle"): (-180.0, 180.0), ("objects", "spread"): (0.0, float("inf"))}
+        if (collection, head) in ranges:
+            low, high = ranges[(collection, head)]
+            if writing == True:
+                value = to_float(arguments[0])
+                if not low <= value <= high:
+                    raise ApiError("%s deve essere tra %s e %s" % (head, low, high))
+                item[head] = value
+                return ok
+            return read(item[head])
+        if collection == "filters" and head == "width":
+            if writing == True:
+                value = to_float(arguments[0])
+                if value < 0 or value > max(audio_map["width"], audio_map["height"]) / 2.0:
+                    raise ApiError("larghezza del filtro non valida")
+                item["width"] = value
+                return ok
+            return read(item["width"])
+        if collection == "filters" and head == "passthroughs":
+            return read([output in item["passthroughs"] for output in range(1, 129)])
+        if collection == "filters" and head == "passthrough" and len(rest) == 2:
+            output = int(to_float(rest[1]))
+            if not 1 <= output <= 128:
+                raise ApiError("uscita da 1 a 128")
+            if writing == True:
+                if to_bool(arguments[0]) == True and output not in item["passthroughs"]:
+                    item["passthroughs"] = sorted(item["passthroughs"] + [output])
+                elif to_bool(arguments[0]) == False and output in item["passthroughs"]:
+                    item["passthroughs"].remove(output)
+                return ok
+            return read(output in item["passthroughs"])
+        if collection == "marks" and head == "levels":
+            return read(self._levels_list(item))
+        if collection == "marks" and head == "level" and len(rest) == 2:
+            output = int(to_float(rest[1]))
+            if not 0 <= output <= 128:
+                raise ApiError("uscita da 0 a 128")
+            if writing == True:
+                item["levels"][output] = -200.0 if isinstance(arguments[0], str) else to_float(arguments[0])
+                return ok
+            return read(item["levels"].get(output, -200.0))
+        if collection == "objects" and head == "colorName":
+            from .audiomap import COLORS as map_colors
+            if writing == True:
+                if str(arguments[0]) not in map_colors:
+                    raise ApiError("colore sconosciuto")
+                item["color"] = str(arguments[0])
+                return ok
+            return read(item["color"])
+        raise ApiError("impostazione sconosciuta: " + "/".join(rest))
+
+    def _test_object(self, audio_map: dict, rest: list, arguments: list, permissions: set) -> dict:
+        test = audio_map["test_object"]
+        ok = {"status": "ok", "data": "ok", "discrete": True}
+        if rest == []:
+            return {"status": "ok", "data": json.dumps(test), "discrete": False}
+        if rest in (["start"], ["stop"]):
+            self._need(permissions, "control")
+            test["running"] = rest == ["start"]
+            return ok
+        names = {("running",): "running", ("level",): "level"}
+        if rest == ["running"]:
+            return {"status": "ok", "data": test["running"], "discrete": False}
+        if rest == ["level"]:
+            if len(arguments) > 0:
+                self._need(permissions, "control")
+                test["level"] = -200.0 if isinstance(arguments[0], str) else to_float(arguments[0])
+                return ok
+            return {"status": "ok", "data": test["level"], "discrete": False}
+        if rest == ["position"]:
+            if len(arguments) >= 2:
+                self._need(permissions, "control")
+                test["x"], test["y"] = to_float(arguments[0]), to_float(arguments[1])
+                return ok
+            return {"status": "ok", "data": [test["x"], test["y"]], "discrete": False}
+        if len(rest) == 2 and rest[0] == "position" and rest[1] in ("x", "y"):
+            if len(arguments) > 0:
+                self._need(permissions, "control")
+                test[rest[1]] = to_float(arguments[0])
+                return ok
+            return {"status": "ok", "data": test[rest[1]], "discrete": False}
+        raise ApiError("impostazione sconosciuta: testObject/" + "/".join(rest))
+
     @staticmethod
     def ensure_video_ids(runtime: Runtime) -> None:
         import uuid
@@ -1530,6 +1721,8 @@ class QLabApi:
             return {"status": "ok", "data": json.dumps(runtime.workspace.patches[patches[key]]), "discrete": False}
         if len(tail) >= 3 and tail[0] == "audio" and tail[1] in ("patch", "patchID"):
             return self._audio_patch_setting(runtime, tail, arguments, permissions)
+        if len(tail) >= 3 and tail[0] == "audio" and tail[1] in ("map", "mapID"):
+            return self._audio_map_setting(runtime, tail, arguments, permissions)
         if len(tail) >= 3 and tail[0] == "video" and tail[1] in ("stage", "stageID", "route", "routeID", "routeIndex"):
             return self._video_setting(runtime, tail, arguments, permissions)
         if tail[-1:] in (["undo"], ["redo"]):

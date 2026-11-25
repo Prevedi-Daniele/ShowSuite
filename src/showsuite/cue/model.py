@@ -406,7 +406,7 @@ class Workspace:
         self.settings = default_settings()
         self.lists: list[Cue] = []
         self.patches = {"audio": [], "audio_input": [], "video_stage": [], "video_route": [], "midi": [], "network": [],
-                        "light": {}}
+                        "audio_map": [], "light": {}}
         self.active_list_id = ""
         self.modified = False
         self._undo_stack: list[str] = []
