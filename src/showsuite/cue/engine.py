@@ -714,8 +714,6 @@ class Runtime:
             self._start_fade(state)
         elif cue_type == TYPE_SCRIPT:
             self._run_script(state)
-        elif cue_type == TYPE_LIGHT and self.light_bridge is not None:
-            self.light_bridge.run_light_cue(self, state)
         handler = self._handler(cue)
         if handler is not None:
             handler.start(self, state)

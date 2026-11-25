@@ -105,6 +105,39 @@ class PlaybackPlan:
             local = local - span
         return None
 
+    def media_positions(self, times):
+        """Per un array di tempi trascorsi (s) restituisce (posizione nel file in s, maschera validità)."""
+        import numpy as np
+        times = np.asarray(times, dtype=np.float64)
+        positions = np.zeros_like(times)
+        valid = np.zeros(times.shape, dtype=bool)
+        cycle = self.cycle_duration()
+        if cycle <= 0.0:
+            return positions, valid
+        if cycle == INFINITE:
+            cycle_index = np.zeros_like(times)
+            local = times
+        else:
+            cycle_index = np.floor(times / cycle)
+            local = times - cycle_index * cycle
+        in_range = np.ones(times.shape, dtype=bool) if self.cycles == INFINITE else cycle_index < self.cycles
+        offset = 0.0
+        for segment in self.segments:
+            if segment.count <= 0:
+                continue
+            length = segment.length(self.rate)
+            span = length * segment.count
+            if length <= 0:
+                continue
+            inside = in_range & (local >= offset) & ((local < offset + span) if span != INFINITE else True)
+            within = np.mod(local - offset, length)
+            positions = np.where(inside, segment.start + within * self.rate, positions)
+            valid = valid | inside
+            if span == INFINITE:
+                break
+            offset = offset + span
+        return positions, valid
+
     def is_looping(self, elapsed: float) -> bool:
         """Vero se la riproduzione è dentro un loop infinito (slice infinita o cue in loop)."""
         position = self.locate(elapsed)
