@@ -498,6 +498,7 @@ class CueWindow(QMainWindow):
         super().__init__()
         self.workspace = workspace if workspace is not None else Workspace()
         self.runtime = runtime if runtime is not None else Runtime(self.workspace, SystemClock(), check_files=True)
+        self.tool_windows: dict = {}
         self.services_options = services_options if services_options is not None else {}
         self.services = Services(self.runtime, **self.services_options)
         self.setWindowTitle("ShowSuite Cue")
@@ -595,6 +596,9 @@ class CueWindow(QMainWindow):
         file_menu.addAction("Salva con nome…", lambda: self.save_workspace(ask=True))
         file_menu.addAction("Impostazioni workspace…", self.open_settings)
         file_menu.addAction("Patch…", self.open_patches)
+        view_menu = self.menuBar().addMenu("Vista")
+        view_menu.addAction("Active Cues", lambda: self._show_tool("active"))
+        view_menu.addAction("Avvisi", lambda: self._show_tool("warnings"))
         edit_menu = self.menuBar().addMenu("Modifica")
         edit_menu.addAction("Annulla", self.undo)
         edit_menu.addAction("Ripeti", self.redo)
@@ -899,6 +903,16 @@ class CueWindow(QMainWindow):
         dialog = SettingsDialog(self.workspace, self)
         if dialog.exec() == QDialog.Accepted:
             dialog.apply()
+
+    def _show_tool(self, kind: str) -> None:
+        from .cue_active import ActiveCuesWindow, WarningsWindow
+        window_class = ActiveCuesWindow if kind == "active" else WarningsWindow
+        existing = self.tool_windows.get(kind)
+        if existing is None or existing.runtime is not self.runtime:
+            existing = window_class(self.runtime)
+            self.tool_windows[kind] = existing
+        existing.show()
+        existing.raise_()
 
     def open_patches(self) -> None:
         from .cue_patch_dialog import PatchDialog
