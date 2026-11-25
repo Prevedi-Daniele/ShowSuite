@@ -594,6 +594,7 @@ class CueWindow(QMainWindow):
         file_menu.addAction("Salva", self.save_workspace)
         file_menu.addAction("Salva con nome…", lambda: self.save_workspace(ask=True))
         file_menu.addAction("Impostazioni workspace…", self.open_settings)
+        file_menu.addAction("Patch…", self.open_patches)
         edit_menu = self.menuBar().addMenu("Modifica")
         edit_menu.addAction("Annulla", self.undo)
         edit_menu.addAction("Ripeti", self.redo)
@@ -896,6 +897,12 @@ class CueWindow(QMainWindow):
 
     def open_settings(self) -> None:
         dialog = SettingsDialog(self.workspace, self)
+        if dialog.exec() == QDialog.Accepted:
+            dialog.apply()
+
+    def open_patches(self) -> None:
+        from .cue_patch_dialog import PatchDialog
+        dialog = PatchDialog(self.workspace, self)
         if dialog.exec() == QDialog.Accepted:
             dialog.apply()
 
