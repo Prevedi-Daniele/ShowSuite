@@ -73,3 +73,28 @@ def test_inspector_mostra_la_scheda_timeline_solo_per_gruppi_timeline():
     assert inspector.tabs.tabText(inspector.tabs.count() - 1) == "Timeline"
     inspector.load(first)
     assert "Timeline" not in [inspector.tabs.tabText(index) for index in range(inspector.tabs.count())]
+
+
+def test_playhead_segue_il_tempo_reale_del_gruppo():
+    from showsuite.cue.engine import ManualClock, Runtime
+    from showsuite.cue.model import GROUP_TIMELINE, TYPE_GROUP, TYPE_NETWORK, Workspace
+    from showsuite.ui.cue_timeline import TimelineEditor
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    workspace = Workspace("S")
+    group = workspace.new_cue(TYPE_GROUP)
+    group.params["mode"] = GROUP_TIMELINE
+    child = workspace.new_cue(TYPE_NETWORK, parent=group)
+    child.duration = 5.0
+    clock = ManualClock()
+    runtime = Runtime(workspace, clock)
+    editor = TimelineEditor()
+    editor.load(group)
+    editor.refresh_playhead(runtime)
+    assert editor.playhead is None
+    runtime.start_cue(group)
+    clock.advance(2.0)
+    runtime.update()
+    editor.refresh_playhead(runtime)
+    assert editor.playhead is not None
+    assert abs(editor.playhead - 2.0) < 0.2

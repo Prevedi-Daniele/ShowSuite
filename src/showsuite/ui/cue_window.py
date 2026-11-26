@@ -630,6 +630,7 @@ class CueWindow(QMainWindow):
         view_menu = self.menuBar().addMenu("Vista")
         view_menu.addAction("Active Cues", lambda: self._show_tool("active"))
         view_menu.addAction("Avvisi", lambda: self._show_tool("warnings"))
+        view_menu.addAction("Light Dashboard", self.open_light_dashboard)
         edit_menu = self.menuBar().addMenu("Modifica")
         edit_menu.addAction("Annulla", self.undo)
         edit_menu.addAction("Ripeti", self.redo)
@@ -729,6 +730,8 @@ class CueWindow(QMainWindow):
         self.runtime.update()
         self.services.tick()
         self.paint_states()
+        if self.inspector.timeline_editor.isVisible() == True:
+            self.inspector.timeline_editor.refresh_playhead(self.runtime)
 
     def start_updates(self) -> None:
         self.services.start()
@@ -934,6 +937,10 @@ class CueWindow(QMainWindow):
         dialog = SettingsDialog(self.workspace, self)
         if dialog.exec() == QDialog.Accepted:
             dialog.apply()
+            if self.services.osc_from_workspace == True:
+                self.services.restart_osc()
+                for message in self.services.errors:
+                    self.status_label.setText(message)
 
     def _show_tool(self, kind: str) -> None:
         from .cue_active import ActiveCuesWindow, WarningsWindow
@@ -942,6 +949,19 @@ class CueWindow(QMainWindow):
         if existing is None or existing.runtime is not self.runtime:
             existing = window_class(self.runtime)
             self.tool_windows[kind] = existing
+        existing.show()
+        existing.raise_()
+
+    def open_light_dashboard(self) -> None:
+        bridge = self.runtime.light_bridge
+        if bridge is None:
+            self.status_label.setText("Light non collegato: avvia Cue con un progetto Light (--light) o un bridge OSC")
+            return
+        from .cue_light_dashboard import LightDashboardWindow
+        existing = self.tool_windows.get("light")
+        if existing is None or existing.bridge is not bridge:
+            existing = LightDashboardWindow(bridge)
+            self.tool_windows["light"] = existing
         existing.show()
         existing.raise_()
 
@@ -992,10 +1012,25 @@ def _real_midi_backend():
         return None
 
 
+def _local_light_bridge(project_path: str):
+    # Carica un progetto Light nello stesso processo e lo espone ai cue Light e alla dashboard.
+    from ..cue.lightbridge import LocalLightBridge
+    from ..light.control.actions import ActionRunner
+    from ..light.engine import LightEngine
+    from ..light.project import load
+    engine = LightEngine(load(project_path))
+    return LocalLightBridge(ActionRunner(engine))
+
+
 def main() -> int:
     application = QApplication(sys.argv)
-    window = CueWindow(services_options={"osc_port": 53000, "use_audio_device": True, "live_network": True,
-                                         "midi_backend": _real_midi_backend()})
+    options = {"osc_from_workspace": True, "use_audio_device": True, "live_network": True,
+               "midi_backend": _real_midi_backend()}
+    if "--light" in sys.argv:
+        light_index = sys.argv.index("--light")
+        if light_index + 1 < len(sys.argv):
+            options["light_bridge"] = _local_light_bridge(sys.argv[light_index + 1])
+    window = CueWindow(services_options=options)
     window.start_updates()
     for message in window.services.errors:
         window.status_label.setText(message)

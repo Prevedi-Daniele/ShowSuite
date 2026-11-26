@@ -51,6 +51,17 @@ class TimelineEditor(QWidget):
         self.setMinimumHeight(height)
         self.update()
 
+    def refresh_playhead(self, runtime) -> None:
+        """Porta il playhead al tempo reale del gruppo (secondi dalla sua partenza); nascosto se il gruppo non è attivo."""
+        position = None
+        if self.group is not None:
+            state = runtime.states.get(self.group.unique_id)
+            if state is not None and state.is_active() == True:
+                position = state.action_elapsed
+        if position != self.playhead:
+            self.playhead = position
+            self.update()
+
     # --- geometria ---
     def total_length(self) -> float:
         if self.group is None or len(self.group.children) == 0:

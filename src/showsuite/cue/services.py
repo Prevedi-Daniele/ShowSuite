@@ -71,9 +71,10 @@ class MidiInputListener:
 class Services:
     def __init__(self, runtime: Runtime, osc_port: int | None = None, audio_device=None, use_audio_device: bool = False,
                  midi_backend=None, midi_input_port: str | None = None, live_network: bool = False,
-                 video_sink=None, light_bridge=None):
+                 video_sink=None, light_bridge=None, osc_from_workspace: bool = False):
         self.runtime = runtime
         self.osc_port = osc_port
+        self.osc_from_workspace = osc_from_workspace
         self.audio_device = audio_device
         self.use_audio_device = use_audio_device
         self.midi_input_port = midi_input_port
@@ -115,14 +116,28 @@ class Services:
 
     # --- ciclo di vita ---
     def start(self) -> None:
-        if self.osc_port is not None:
+        self.start_osc()
+        self._start_devices()
+
+    def start_osc(self) -> None:
+        ports = self.osc_ports()
+        if ports is not None:
             from .osc import OscServer
-            self.osc_server = OscServer(self.api.handle, port=self.osc_port)
+            self.osc_server = OscServer(self.api.handle, port=ports[0], reply_port=ports[1], plain_port=ports[2])
             try:
                 self.osc_server.start()
             except OSError as error:
                 self.errors.append("server OSC non avviato: " + str(error))
                 self.osc_server = None
+
+    def restart_osc(self) -> None:
+        """Riavvia il server OSC con le impostazioni correnti (dopo la modifica delle impostazioni)."""
+        if self.osc_server is not None:
+            self.osc_server.stop()
+            self.osc_server = None
+        self.start_osc()
+
+    def _start_devices(self) -> None:
         if self.use_audio_device == True and self.mixer is not None:
             try:
                 self.mixer.open_stream(self.audio_device)
@@ -133,6 +148,21 @@ class Services:
                 self.midi_listener = MidiInputListener(self.midi_input_port, self.triggers.midi_in)
             except Exception as error:
                 self.errors.append("ingresso MIDI non aperto: " + str(error))
+
+    def osc_ports(self) -> tuple[int, int, int] | None:
+        """Porte (principale, risposte, testo semplice) o None se il server OSC non va avviato.
+
+        Con `osc_from_workspace` valgono le impostazioni del workspace (osc_access, osc_port, osc_reply_port,
+        osc_plain_port); altrimenti `osc_port` esplicito (le altre due restano ai valori predefiniti)."""
+        if self.osc_from_workspace == True:
+            settings = self.runtime.workspace.settings
+            if settings.get("osc_access", True) == False:
+                return None
+            return (int(settings.get("osc_port", 53000)), int(settings.get("osc_reply_port", 53001)),
+                    int(settings.get("osc_plain_port", 53535)))
+        if self.osc_port is not None:
+            return (self.osc_port, 53001, 53535)
+        return None
 
     def stop(self) -> None:
         if self.osc_server is not None:

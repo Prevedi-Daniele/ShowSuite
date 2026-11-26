@@ -70,3 +70,33 @@ def test_sostituzione_workspace_ricrea_i_servizi():
     assert window.services is not old
     assert window.services.runtime is window.runtime
     assert TYPE_NETWORK in window.runtime.handlers
+
+
+def test_porte_osc_dalle_impostazioni_del_workspace():
+    workspace = Workspace("S")
+    workspace.settings["osc_port"] = 54321
+    workspace.settings["osc_reply_port"] = 54322
+    workspace.settings["osc_plain_port"] = 54323
+    services = Services(Runtime(workspace, ManualClock()), osc_from_workspace=True)
+    assert services.osc_ports() == (54321, 54322, 54323)
+    workspace.settings["osc_access"] = False
+    assert services.osc_ports() is None
+    explicit = Services(Runtime(Workspace("S"), ManualClock()), osc_port=12345)
+    assert explicit.osc_ports() == (12345, 53001, 53535)
+    assert Services(Runtime(Workspace("S"), ManualClock())).osc_ports() is None
+
+
+def test_riavvio_osc_applica_la_nuova_porta():
+    workspace = Workspace("S")
+    workspace.settings["osc_port"] = 0
+    workspace.settings["osc_plain_port"] = 0
+    workspace.settings["osc_reply_port"] = 0
+    services = Services(Runtime(workspace, ManualClock()), osc_from_workspace=True)
+    services.start_osc()
+    assert services.osc_server is not None
+    services.restart_osc()
+    assert services.osc_server is not None
+    workspace.settings["osc_access"] = False
+    services.restart_osc()
+    assert services.osc_server is None
+    services.stop()
