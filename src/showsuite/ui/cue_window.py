@@ -627,6 +627,7 @@ class CueWindow(QMainWindow):
         file_menu.addAction("Salva con nome…", lambda: self.save_workspace(ask=True))
         file_menu.addAction("Impostazioni workspace…", self.open_settings)
         file_menu.addAction("Patch…", self.open_patches)
+        file_menu.addAction("Audio Map Editor…", self.open_audio_map_editor)
         view_menu = self.menuBar().addMenu("Vista")
         view_menu.addAction("Active Cues", lambda: self._show_tool("active"))
         view_menu.addAction("Avvisi", lambda: self._show_tool("warnings"))
@@ -962,6 +963,16 @@ class CueWindow(QMainWindow):
         if existing is None or existing.bridge is not bridge:
             existing = LightDashboardWindow(bridge)
             self.tool_windows["light"] = existing
+        existing.show()
+        existing.raise_()
+
+    def open_audio_map_editor(self) -> None:
+        from .cue_audiomap_editor import AudioMapEditor
+        existing = self.tool_windows.get("audiomap")
+        if existing is None or existing.workspace is not self.workspace:
+            existing = AudioMapEditor(self.workspace)
+            self.tool_windows["audiomap"] = existing
+        existing.reload()
         existing.show()
         existing.raise_()
 
