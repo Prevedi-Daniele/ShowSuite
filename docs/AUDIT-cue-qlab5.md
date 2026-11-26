@@ -18,7 +18,7 @@ e "non scrivibile" no). Limite: se la forma di scrittura esiste ma la lettura no
 Correzione di una mia svista: durante il lavoro uno script difettoso ha mostrato 1017/1047; era un falso positivo (non contava "non scrivibile").
 Partenza del giorno: 459/1047 (44 per cento).
 Non riconosciuti (126, elenco in `docs/osc_non_riconosciuti.txt`): `/qlab/event` in ingresso (20, sono messaggi che QLab INVIA, non comandi),
-effetti video (`videoEffect*`), `liveAverageLevel` e varianti (richiedono meter in tempo reale), `gang`, `doLevel/doObjectLevel`,
+`liveAverageLevel` e varianti (richiedono meter in tempo reale), `gang`, `doLevel/doObjectLevel`,
 `parameterValue`, `useSecondColor`, `surfaceName/Size`, `/update/...` (notifiche in uscita, non comandi), `/workingDirectory`,
 `/udpReplyPort`, `/overrideWindow`, `/timecodeWindow`.
 
@@ -35,11 +35,11 @@ video compositor (stage/regioni/route, maschere, edge blend, warp a 4 angoli, la
 - **Audio Map / object audio**: modello, indirizzi e instradamento fatti, ma con algoritmo APPROSSIMATO (QLab non pubblica la formula di gravity/shadow/filtri): i livelli intermedi non coincidono con QLab. Mancano Audio Map Editor grafico, heatmap, test object reale (solo stato), fade degli oggetti con Fade cue.
 - **Show control broadcast MSC (8.7)**: la parte OSC è fatta, l'invio MSC ai dispositivi MIDI no.
 - Liste di OSC `/cue/.../` mancanti per tutti i tipi: marker di slice (`sliceMarker`, `addSliceMarker`...), `playlist`, `mute/solo` per canale/oggetto,
-  `liveAverageLevel`, `videoEffect*`, `rotate`, `gang`, `expand/collapse`, `tempDuration`, `soloCueInTime`, `fadeEntries`, `parameterValue(s)`,
+  `liveAverageLevel`, `rotate`, `gang`, `expand/collapse`, `tempDuration`, `soloCueInTime`, `fadeEntries`, `parameterValue(s)`,
   `valuesForKeysWithArguments`, `surface*`/`stage*`, `*PatchID/Name/Number`.
 - UI: fatti editor matrice/envelope/slice, Fade/Network/MIDI e Timeline (barre trascinabili, ma playhead non collegato al tempo reale, nessuna selezione multipla). Mancano: Audio Map Editor grafico, Light Dashboard, Workspace Status e Timecode Status (cap. 4),
   Find e Paste Cue Properties (3.2-3.3), finestra Monitor e Audition (3.5-3.6) in UI, Override Controls in UI, Launcher (3.4), tasti rapidi completi (1.5).
-- Video: effetti video (6.7), warp a griglia/Bézier, Mic cue e ingressi, preserve pitch, plugin effetti audio (solo EQ/filtri/delay), uscita LTC reale su scheda audio.
+- Video: effetti video: fatti 17 su ~90 del manuale (colore, blur, pixellate, shutter, window; vedi `cue/videofx.py`), mancano distorsioni, tile, kaleidoscope, droste, spotlight, ombre, ecc.; warp a griglia/Bézier, Mic cue e ingressi, preserve pitch, plugin effetti audio (solo EQ/filtri/delay), uscita LTC reale su scheda audio.
 - Collaborazione multiutente (8.1) e Workspace Templates (2.3).
 - Le impostazioni OSC del workspace (porte) non governano ancora il server (usa 53000/53001/53535 fissi).
 

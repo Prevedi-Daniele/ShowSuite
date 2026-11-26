@@ -125,12 +125,14 @@ class Inspector(QWidget):
         self.params_editor = ParamEditor()
         self.params_editor.changed.connect(self.changed.emit)
         self.tabs.addTab(self.params_editor, "Parametri")
-        from .cue_editors import EnvelopeEditor, LevelsEditor, ObjectsEditor, SliceEditor
+        from .cue_editors import EnvelopeEditor, LevelsEditor, ObjectsEditor, SliceEditor, VideoEffectsEditor
         self.media_editors = {"Livelli": LevelsEditor(workspace), "Slice": SliceEditor(),
                               "Envelope": EnvelopeEditor(), "Oggetti": ObjectsEditor(workspace)}
         from .cue_message_editors import FadeEditor, MidiEditor, NetworkEditor
         self.type_editors = {"network": {"Network": NetworkEditor()}, "midi": {"MIDI": MidiEditor()},
-                             "fade": {"Fade": FadeEditor()}}
+                             "fade": {"Fade": FadeEditor()},
+                             "video": {"Effetti video": VideoEffectsEditor()}, "camera": {"Effetti video": VideoEffectsEditor()},
+                             "text": {"Effetti video": VideoEffectsEditor()}}
         from .cue_timeline import TimelineEditor
         self.timeline_editor = TimelineEditor()
         self.timeline_editor.changed.connect(self._touch)
@@ -316,7 +318,7 @@ class Inspector(QWidget):
             self.tabs.addTab(self.timeline_editor, "Timeline")
         for title, editor in self.type_editors.get(cue.cue_type, {}).items():
             editor.load(cue)
-            self.tabs.addTab(self._top_aligned(editor) if title != "Fade" else editor, title)
+            self.tabs.addTab(self._top_aligned(editor) if title not in ("Fade", "Effetti video") else editor, title)
 
     # --- scrittura ---
     def _touch(self) -> None:

@@ -117,7 +117,7 @@ ACTIONS = ["go", "start", "startAndAutoloadNext", "stop", "pause", "resume", "to
            "prune", "pruneCommands", "safeSort", "safeSortCommands", "collateAndStart"]
 
 
-CUE_EXTRA_NAMES = ("sliceMarker", "sliceMarkers", "addSliceMarker", "deleteSliceMarker", "deleteSliceMarkers", "playlist", "rotate", "audioOutputPatch", "audioOutputPatchID",
+CUE_EXTRA_NAMES = ("videoEffects", "videoEffect", "videoEffectIndex", "sliceMarker", "sliceMarkers", "addSliceMarker", "deleteSliceMarker", "deleteSliceMarkers", "playlist", "rotate", "audioOutputPatch", "audioOutputPatchID",
                    "audioOutputPatchName", "audioOutputPatchNumber", "muteChannels", "soloChannels",
                    "muteObjects", "soloObjects", "sliderLevel", "sliderLevels", "objectLevel", "objectIDLevel",
                    "objectLevels")
@@ -1422,6 +1422,92 @@ class QLabApi:
             return collected[0]
         return {"status": "ok", "data": [item["data"] for item in collected], "discrete": collected[0]["discrete"]}
 
+    def _video_effects(self, cue: Cue, name: str, rest: list, arguments: list, increment: int, writing: bool,
+                       permissions: set) -> dict:
+        """videoEffects (+ add/insert), videoEffect/{nome}/... e videoEffectIndex/{indice}/... (manuale 9.1)."""
+        from . import videofx
+        effects = cue.params.setdefault("video_fx", [])
+        ok = {"status": "ok", "data": "ok", "discrete": True}
+
+        def read(value):
+            return {"status": "ok", "data": value, "discrete": False}
+
+        if name == "videoEffects":
+            if len(rest) == 0:
+                return read(json.dumps([effect["name"] for effect in effects]))
+            self._need(permissions, "edit")
+            try:
+                effect = videofx.new_effect(str(arguments[0]))
+            except (ValueError, IndexError) as error:
+                raise ApiError(str(error))
+            if rest[0] == "add":
+                effects.append(effect)
+            elif rest[0] == "insert":
+                index = max(0, to_int(arguments[1])) if len(arguments) > 1 else len(effects)
+                effects.insert(min(index, len(effects)), effect)
+            else:
+                raise ApiError("comando videoEffects sconosciuto: " + rest[0])
+            return ok
+        if len(rest) < 2:
+            raise ApiError("effetto video non specificato")
+        index = -1
+        if name == "videoEffect":
+            for position, effect in enumerate(effects):
+                if effect["name"] == rest[0]:
+                    index = position
+                    break
+        else:
+            index = to_int(rest[0])
+        action = rest[1]
+        if not 0 <= index < len(effects):
+            if action in ("delete", "move"):
+                return ok
+            raise ApiError("effetto video inesistente")
+        effect = effects[index]
+        if action == "delete":
+            self._need(permissions, "edit")
+            del effects[index]
+            return ok
+        if action == "move":
+            self._need(permissions, "edit")
+            target = min(max(0, to_int(arguments[0])), len(effects) - 1)
+            effects.insert(target, effects.pop(index))
+            return ok
+        if action == "enabled":
+            if len(arguments) == 0:
+                return read(effect.get("enabled", True))
+            self._need(permissions, "edit")
+            effect["enabled"] = to_bool(arguments[0])
+            return ok
+        merged = dict(videofx.EFFECTS[effect["name"]]["parameters"])
+        merged.update(effect["parameters"])
+        if action == "parameters":
+            if len(arguments) == 0:
+                return read(json.dumps(merged))
+            self._need(permissions, "edit")
+            try:
+                for key, value in json.loads(str(arguments[0])).items():
+                    videofx.set_parameter(effect, key, value)
+            except (ValueError, TypeError) as error:
+                raise ApiError(str(error))
+            return ok
+        if action == "parameter" and len(rest) >= 3:
+            key = rest[2]
+            if key not in merged:
+                raise ApiError("parametro sconosciuto: " + key)
+            if len(arguments) == 0 and increment == 0:
+                return read(merged[key])
+            self._need(permissions, "edit")
+            try:
+                value = arguments if isinstance(merged[key], list) else arguments[0]
+                if increment != 0:
+                    value = float(merged[key]) + increment * to_float(arguments[0])
+                videofx.set_parameter(effect, key, value)
+            except (ValueError, TypeError, IndexError) as error:
+                raise ApiError(str(error))
+            return ok
+        raise ApiError("comando effetto video sconosciuto: " + action)
+
     def _cue_extra_single(self, runtime: Runtime, cue: Cue, parts: list, arguments: list, permissions: set) -> dict:
         name = parts[0]
         ok = {"status": "ok", "data": "ok", "discrete": True}
@@ -1456,6 +1542,8 @@ class QLabApi:
                 slices.append({"time": max(0.0, when), "play_count": "inf" if count < 0 else count})
                 slices.sort(key=lambda item: float(item["time"]))
             return ok
+        if name in ("videoEffects", "videoEffect", "videoEffectIndex"):
+            return self._video_effects(cue, name, rest, arguments, increment, writing, permissions)
         if name in ("sliceMarker", "sliceMarkers"):
             return self._slice_markers(cue, name, rest, arguments, increment, writing)
         if name == "playlist":

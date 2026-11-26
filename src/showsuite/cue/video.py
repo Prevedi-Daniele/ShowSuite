@@ -228,6 +228,10 @@ class VideoCompositor(ActionHandler):
         frame = frame[int(top):height_px - int(bottom), int(left):width_px - int(right)]
         if frame.size == 0:
             return
+        effects = get("video_fx", [])
+        if len(effects) > 0:
+            from .videofx import apply_effects
+            frame = apply_effects(frame, effects)
         stage_height, stage_width = canvas.shape[:2]
         source_height, source_width = frame.shape[:2]
         scale_x, scale_y = [float(value) for value in get("scale", [1.0, 1.0])]

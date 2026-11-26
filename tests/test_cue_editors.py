@@ -200,3 +200,31 @@ def test_objects_editor_mappa_e_oggetti():
     assert cue.params["objects"] == []
     editor.load(cue)
     assert editor.map_box.currentData() == audio_map["unique_id"]
+
+
+def test_video_effects_editor():
+    from showsuite.cue.model import Workspace
+    from PySide6.QtCore import Qt
+    from showsuite.ui.cue_editors import VideoEffectsEditor
+    workspace = Workspace("E")
+    cue = workspace.new_cue("video")
+    editor = VideoEffectsEditor()
+    editor.load(cue)
+    editor.effect_box.setCurrentIndex(editor.effect_box.findData("Exposure"))
+    editor.add_effect()
+    editor.effect_box.setCurrentIndex(editor.effect_box.findData("Gamma"))
+    editor.add_effect()
+    assert [effect["name"] for effect in cue.params["video_fx"]] == ["Exposure", "Gamma"]
+    assert editor.table.item(0, 0).text() == "inputPower"
+    editor.table.item(0, 1).setText("2,5")
+    assert cue.params["video_fx"][1]["parameters"]["inputPower"] == 2.5
+    editor.table.item(0, 1).setText("abc")
+    assert editor.table.item(0, 1).text() == "2.5"
+    editor.move_effect(-1)
+    assert [effect["name"] for effect in cue.params["video_fx"]] == ["Gamma", "Exposure"]
+    editor.list.item(0).setCheckState(Qt.Unchecked)
+    assert cue.params["video_fx"][0]["enabled"] == False
+    editor.reset_effect()
+    assert cue.params["video_fx"][0]["parameters"]["inputPower"] == 1.0
+    editor.remove_effect()
+    assert len(cue.params["video_fx"]) == 1

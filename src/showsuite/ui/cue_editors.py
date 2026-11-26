@@ -459,3 +459,143 @@ class ObjectsEditor(QWidget):
             self._fill_table()
             return
         self.changed.emit()
+
+
+class VideoEffectsEditor(QWidget):
+    """Effetti video del cue: elenco ordinato (casella = abilitato), aggiungi/rimuovi/sposta e tabella dei parametri."""
+    changed = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.cue: Cue | None = None
+        self._loading = False
+        from PySide6.QtWidgets import QComboBox, QListWidget
+        from ..cue import videofx
+        self.videofx = videofx
+        layout = QVBoxLayout(self)
+        top = QHBoxLayout()
+        self.effect_box = QComboBox()
+        for name, definition in videofx.EFFECTS.items():
+            self.effect_box.addItem(definition["title"], name)
+        self.add_button = QPushButton("Aggiungi")
+        self.add_button.clicked.connect(self.add_effect)
+        top.addWidget(self.effect_box, 1)
+        top.addWidget(self.add_button)
+        layout.addLayout(top)
+        self.list = QListWidget()
+        self.list.currentRowChanged.connect(self._show_parameters)
+        self.list.itemChanged.connect(self._item_changed)
+        layout.addWidget(self.list)
+        buttons = QHBoxLayout()
+        self.remove_button = QPushButton("Rimuovi")
+        self.remove_button.clicked.connect(self.remove_effect)
+        self.up_button = QPushButton("Su")
+        self.up_button.clicked.connect(lambda: self.move_effect(-1))
+        self.down_button = QPushButton("Giù")
+        self.down_button.clicked.connect(lambda: self.move_effect(1))
+        self.reset_button = QPushButton("Default")
+        self.reset_button.clicked.connect(self.reset_effect)
+        for button in (self.remove_button, self.up_button, self.down_button, self.reset_button):
+            buttons.addWidget(button)
+        layout.addLayout(buttons)
+        self.table = QTableWidget(0, 2)
+        self.table.setHorizontalHeaderLabels(["Parametro", "Valore"])
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.itemChanged.connect(self._parameter_changed)
+        layout.addWidget(self.table)
+
+    def effects(self) -> list:
+        return self.cue.params.setdefault("video_fx", []) if self.cue is not None else []
+
+    def load(self, cue: Cue | None) -> None:
+        self.cue = cue
+        self._fill_list(0)
+
+    def _fill_list(self, row: int) -> None:
+        self._loading = True
+        from PySide6.QtWidgets import QListWidgetItem
+        self.list.clear()
+        for effect in self.effects():
+            title = self.videofx.EFFECTS.get(effect["name"], {}).get("title", effect["name"])
+            item = QListWidgetItem(title)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked if effect.get("enabled", True) == True else Qt.Unchecked)
+            self.list.addItem(item)
+        if self.list.count() > 0:
+            self.list.setCurrentRow(min(row, self.list.count() - 1))
+        self._loading = False
+        self._show_parameters(self.list.currentRow())
+
+    def _show_parameters(self, row: int) -> None:
+        was_loading = self._loading
+        self._loading = True
+        self.table.setRowCount(0)
+        effects = self.effects()
+        if 0 <= row < len(effects) and effects[row]["name"] in self.videofx.EFFECTS:
+            merged = dict(self.videofx.EFFECTS[effects[row]["name"]]["parameters"])
+            merged.update(effects[row]["parameters"])
+            for key, value in merged.items():
+                index = self.table.rowCount()
+                self.table.insertRow(index)
+                key_item = QTableWidgetItem(key)
+                key_item.setFlags(key_item.flags() & ~Qt.ItemIsEditable)
+                self.table.setItem(index, 0, key_item)
+                text = ", ".join(str(item) for item in value) if isinstance(value, list) else str(value)
+                self.table.setItem(index, 1, QTableWidgetItem(text))
+        self._loading = was_loading
+
+    def add_effect(self) -> None:
+        if self.cue is None:
+            return
+        self.effects().append(self.videofx.new_effect(self.effect_box.currentData()))
+        self._fill_list(len(self.effects()) - 1)
+        self.changed.emit()
+
+    def remove_effect(self) -> None:
+        row = self.list.currentRow()
+        if 0 <= row < len(self.effects()):
+            del self.effects()[row]
+            self._fill_list(row)
+            self.changed.emit()
+
+    def move_effect(self, step: int) -> None:
+        row = self.list.currentRow()
+        target = row + step
+        effects = self.effects()
+        if 0 <= row < len(effects) and 0 <= target < len(effects):
+            effects.insert(target, effects.pop(row))
+            self._fill_list(target)
+            self.changed.emit()
+
+    def reset_effect(self) -> None:
+        row = self.list.currentRow()
+        if 0 <= row < len(self.effects()):
+            self.effects()[row] = self.videofx.new_effect(self.effects()[row]["name"])
+            self._fill_list(row)
+            self.changed.emit()
+
+    def _item_changed(self, item) -> None:
+        if self._loading == True:
+            return
+        row = self.list.row(item)
+        if 0 <= row < len(self.effects()):
+            self.effects()[row]["enabled"] = item.checkState() == Qt.Checked
+            self.changed.emit()
+
+    def _parameter_changed(self, item) -> None:
+        if self._loading == True or item.column() != 1:
+            return
+        row = self.list.currentRow()
+        effects = self.effects()
+        if not 0 <= row < len(effects):
+            return
+        key = self.table.item(item.row(), 0).text()
+        try:
+            text = item.text().replace(";", ",")
+            default = self.videofx.EFFECTS[effects[row]["name"]]["parameters"][key]
+            value = [float(part) for part in text.split(",")] if isinstance(default, list) else float(text.replace(",", "."))
+            self.videofx.set_parameter(effects[row], key, value)
+        except ValueError:
+            self._show_parameters(row)
+            return
+        self.changed.emit()
