@@ -125,6 +125,11 @@ class Inspector(QWidget):
         self.params_editor = ParamEditor()
         self.params_editor.changed.connect(self.changed.emit)
         self.tabs.addTab(self.params_editor, "Parametri")
+        from .cue_editors import EnvelopeEditor, LevelsEditor, SliceEditor
+        self.media_editors = {"Livelli": LevelsEditor(workspace), "Slice": SliceEditor(),
+                              "Envelope": EnvelopeEditor()}
+        for editor in self.media_editors.values():
+            editor.changed.connect(self._touch)
 
     @staticmethod
     def _top_aligned(page: QWidget) -> QWidget:
@@ -244,6 +249,8 @@ class Inspector(QWidget):
         if cue is None:
             self.title.setText("Nessun cue selezionato")
             self.params_editor.load(None)
+            while self.tabs.count() > 3:
+                self.tabs.removeTab(3)
             self._loading = False
             return
         self.title.setText("%s — %s" % (TYPE_LABELS.get(cue.cue_type, cue.cue_type), cue.display_name(self.workspace)))
@@ -285,7 +292,17 @@ class Inspector(QWidget):
         self.duck_enabled.setChecked(bool(cue.duck_others.get("enabled", False)))
         self.duck_level.setValue(float(cue.duck_others.get("level", -12.0)))
         self.params_editor.load(cue)
+        self._show_media_editors(cue)
         self._loading = False
+
+    def _show_media_editors(self, cue: Cue) -> None:
+        wanted = cue.cue_type == "audio"
+        while self.tabs.count() > 3:
+            self.tabs.removeTab(3)
+        if wanted == True:
+            for title, editor in self.media_editors.items():
+                editor.load(cue)
+                self.tabs.addTab(editor, title)
 
     # --- scrittura ---
     def _touch(self) -> None:
