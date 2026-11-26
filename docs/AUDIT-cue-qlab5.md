@@ -37,8 +37,10 @@ video compositor (stage/regioni/route, maschere, edge blend, warp a 4 angoli, la
 - Liste di OSC `/cue/.../` mancanti per tutti i tipi: marker di slice (`sliceMarker`, `addSliceMarker`...), `playlist`, `mute/solo` per canale/oggetto,
   `liveAverageLevel`, `rotate`, `gang`, `expand/collapse`, `tempDuration`, `soloCueInTime`, `fadeEntries`, `parameterValue(s)`,
   `valuesForKeysWithArguments`, `surface*`/`stage*`, `*PatchID/Name/Number`.
-- UI: fatti editor matrice/envelope/slice, Fade/Network/MIDI e Timeline (barre trascinabili, ma playhead non collegato al tempo reale, nessuna selezione multipla). Mancano: Audio Map Editor grafico, Light Dashboard, Workspace Status e Timecode Status (cap. 4),
-  Find e Paste Cue Properties (3.2-3.3), finestra Monitor e Audition (3.5-3.6) in UI, Override Controls in UI, Launcher (3.4), tasti rapidi completi (1.5).
+- UI: fatti editor matrice/envelope/slice, Fade/Network/MIDI, Timeline (con playhead reale; senza selezione multipla), Audio Map Editor
+  (grafico, senza undo né sfondo), scheda Oggetti, scheda Effetti video, Light Dashboard (equivalente: l'originale è macOS/Lightkey), Find,
+  Paste Cue Properties, Override Controls (per workspace, non globale) e Timecode Status (solo ingresso). Mancano: Workspace Status completo
+  (Logs, Triggers, Video Metrics), finestra Monitor e Audition (3.5-3.6), Launcher (3.4), tasti rapidi completi (1.5).
 - Video: effetti video: fatti 17 su ~90 del manuale (colore, blur, pixellate, shutter, window; vedi `cue/videofx.py`), mancano distorsioni, tile, kaleidoscope, droste, spotlight, ombre, ecc.; warp a griglia/Bézier, Mic cue e ingressi, preserve pitch, plugin effetti audio (solo EQ/filtri/delay), uscita LTC reale su scheda audio.
 - Collaborazione multiutente (8.1) e Workspace Templates (2.3).
 - Le impostazioni OSC del workspace (porte) non governano ancora il server (usa 53000/53001/53535 fissi).

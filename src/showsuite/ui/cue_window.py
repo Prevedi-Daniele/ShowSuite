@@ -634,6 +634,8 @@ class CueWindow(QMainWindow):
         view_menu.addAction("Active Cues", lambda: self._show_tool("active"))
         view_menu.addAction("Avvisi", lambda: self._show_tool("warnings"))
         view_menu.addAction("Light Dashboard", self.open_light_dashboard)
+        view_menu.addAction("Override Controls", lambda: self._show_simple_tool("override"), QKeySequence("Ctrl+Shift+O"))
+        view_menu.addAction("Timecode Status", lambda: self._show_simple_tool("timecode"))
         edit_find = self.menuBar().addMenu("Cerca")
         edit_find.addAction("Find…", self.open_find, QKeySequence("Ctrl+F"))
         edit_menu = self.menuBar().addMenu("Modifica")
@@ -641,6 +643,8 @@ class CueWindow(QMainWindow):
         edit_menu.addAction("Ripeti", self.redo)
         edit_menu.addAction("Duplica", self.duplicate_selected)
         edit_menu.addAction("Rinumera selezionati…", self.renumber_selected)
+        edit_menu.addAction("Copia proprietà", self.copy_properties, QKeySequence("Ctrl+Alt+C"))
+        edit_menu.addAction("Incolla proprietà…", self.paste_properties, QKeySequence("Ctrl+Alt+V"))
         edit_menu.addAction("Nuova lista", lambda: self.add_list(False))
         edit_menu.addAction("Nuovo cart", lambda: self.add_list(True))
 
@@ -967,6 +971,45 @@ class CueWindow(QMainWindow):
         if existing is None or existing.bridge is not bridge:
             existing = LightDashboardWindow(bridge)
             self.tool_windows["light"] = existing
+        existing.show()
+        existing.raise_()
+
+    def copy_properties(self) -> None:
+        from ..cue.properties import copy_properties
+        cues = self.selected_cues()
+        if len(cues) != 1:
+            self.status_label.setText("Seleziona un solo cue da cui copiare le proprietà")
+            return
+        self.property_clipboard = copy_properties(cues[0])
+        self.status_label.setText("Proprietà copiate")
+
+    def paste_properties(self) -> None:
+        from ..cue.properties import paste_properties
+        from .cue_tools import PastePropertiesDialog
+        if getattr(self, "property_clipboard", None) is None:
+            self.status_label.setText("Niente da incollare: copia prima le proprietà di un cue")
+            return
+        targets = self.selected_cues()
+        if len(targets) == 0:
+            return
+        dialog = PastePropertiesDialog(self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        self._mutate()
+        changed = paste_properties(self.property_clipboard, targets, dialog.chosen_groups())
+        self.workspace.modified = True
+        self.refresh_tree()
+        self.status_label.setText("Proprietà incollate su %d cue" % changed)
+
+    def _show_simple_tool(self, kind: str) -> None:
+        from .cue_tools import OverrideControlsWindow, TimecodeStatusWindow
+        existing = self.tool_windows.get(kind)
+        if existing is None or getattr(existing, "workspace", self.workspace) is not self.workspace:
+            if kind == "override":
+                existing = OverrideControlsWindow(self.workspace)
+            else:
+                existing = TimecodeStatusWindow(self.runtime, self.services.triggers)
+            self.tool_windows[kind] = existing
         existing.show()
         existing.raise_()
 
