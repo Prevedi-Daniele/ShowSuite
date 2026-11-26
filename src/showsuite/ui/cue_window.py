@@ -128,8 +128,14 @@ class Inspector(QWidget):
         from .cue_editors import EnvelopeEditor, LevelsEditor, SliceEditor
         self.media_editors = {"Livelli": LevelsEditor(workspace), "Slice": SliceEditor(),
                               "Envelope": EnvelopeEditor()}
+        from .cue_message_editors import FadeEditor, MidiEditor, NetworkEditor
+        self.type_editors = {"network": {"Network": NetworkEditor()}, "midi": {"MIDI": MidiEditor()},
+                             "fade": {"Fade": FadeEditor()}}
         for editor in self.media_editors.values():
             editor.changed.connect(self._touch)
+        for group in self.type_editors.values():
+            for editor in group.values():
+                editor.changed.connect(self._touch)
 
     @staticmethod
     def _top_aligned(page: QWidget) -> QWidget:
@@ -296,13 +302,15 @@ class Inspector(QWidget):
         self._loading = False
 
     def _show_media_editors(self, cue: Cue) -> None:
-        wanted = cue.cue_type == "audio"
         while self.tabs.count() > 3:
             self.tabs.removeTab(3)
-        if wanted == True:
+        if cue.cue_type == "audio":
             for title, editor in self.media_editors.items():
                 editor.load(cue)
                 self.tabs.addTab(editor, title)
+        for title, editor in self.type_editors.get(cue.cue_type, {}).items():
+            editor.load(cue)
+            self.tabs.addTab(self._top_aligned(editor) if title != "Fade" else editor, title)
 
     # --- scrittura ---
     def _touch(self) -> None:

@@ -102,3 +102,74 @@ def test_inspector_mostra_le_schede_solo_per_cue_audio():
     other = workspace.new_cue("wait")
     inspector.load(other)
     assert inspector.tabs.count() == 3
+
+
+def test_network_editor_scrive_i_parametri_e_abilita_il_fade():
+    from showsuite.ui.cue_message_editors import NetworkEditor
+    from showsuite.cue.model import TYPE_NETWORK
+    workspace, cue = make_cue()
+    network = workspace.new_cue(TYPE_NETWORK)
+    editor = NetworkEditor()
+    editor.load(network)
+    assert editor.fade_from.isEnabled() == False
+    editor.message.setText("/fader $1")
+    editor.message.editingFinished.emit()
+    editor.kind.setCurrentIndex(editor.kind.findData("udp"))
+    editor.fade_type.setCurrentIndex(1)
+    editor.fade_to.setValue(0.75)
+    editor.curve.kind.setCurrentText("linear")
+    assert network.params["message"] == "/fader $1" and network.params["message_kind"] == "udp"
+    assert network.params["fade_type"] == 1 and network.params["fade_to"] == 0.75
+    assert network.params["curve"]["type"] == "linear"
+    assert editor.fade_from.isEnabled() == True
+
+
+def test_midi_editor_mostra_i_campi_del_tipo_e_scrive():
+    from showsuite.ui.cue_message_editors import MidiEditor
+    from showsuite.cue.model import TYPE_MIDI
+    workspace, cue = make_cue()
+    midi = workspace.new_cue(TYPE_MIDI)
+    editor = MidiEditor()
+    editor.show()
+    editor.load(midi)
+    assert editor.visible_group() == "voice" and editor.channel.isVisible() == True and editor.raw.isVisible() == False
+    editor.channel.setValue(5)
+    editor.end_value.setText("100")
+    editor.end_value.editingFinished.emit()
+    assert midi.params["channel"] == 5 and midi.params["end_value"] == 100
+    editor.message_type.setCurrentIndex(1)
+    assert midi.params["message_type"] == 2 and editor.q_number.isVisible() == True and editor.channel.isVisible() == False
+    editor.command.setCurrentIndex(editor.command.findData(6))
+    assert midi.params["command"] == 6
+    editor.message_type.setCurrentIndex(2)
+    editor.raw.setText("F0 7F F7")
+    editor.raw.editingFinished.emit()
+    assert midi.params["raw_string"] == "F0 7F F7" and midi.params["message_type"] == 3
+
+
+def test_fade_editor_livelli_e_parametri():
+    from showsuite.ui.cue_message_editors import FadeEditor
+    from showsuite.cue.model import TYPE_FADE
+    workspace, cue = make_cue()
+    fade = workspace.new_cue(TYPE_FADE)
+    editor = FadeEditor()
+    editor.load(fade)
+    editor.add_level("main", -12.0)
+    editor.add_level("1/2", -200.0)
+    assert fade.params["levels"] == {"main": -12.0, "1/2": -200.0}
+    editor.levels_mode.setCurrentIndex(1)
+    editor.do_opacity.setChecked(True)
+    editor.opacity.setValue(0.25)
+    editor.stop_target.setChecked(True)
+    assert fade.params["levels_mode"] == "relative" and fade.params["do_opacity"] == True
+    assert fade.params["opacity"] == 0.25 and fade.params["stop_target_when_done"] == True
+
+
+def test_inspector_schede_per_tipo():
+    from showsuite.ui.cue_window import Inspector
+    from showsuite.cue.model import TYPE_FADE, TYPE_MIDI, TYPE_NETWORK
+    workspace, cue = make_cue()
+    inspector = Inspector(workspace)
+    for cue_type, title in ((TYPE_NETWORK, "Network"), (TYPE_MIDI, "MIDI"), (TYPE_FADE, "Fade")):
+        inspector.load(workspace.new_cue(cue_type))
+        assert inspector.tabs.tabText(inspector.tabs.count() - 1) == title
