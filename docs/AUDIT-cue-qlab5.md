@@ -11,12 +11,16 @@ Data: 2026-11-25. Test: 314 verdi. Nessuna funzione di questo documento è stata
 - **Altri capitoli**: NON letti riga per riga. Il giudizio si basa sui titoli di sezione del manuale e sul codice. Va considerato
   una stima, non una verifica.
 
-## Copertura OSC (aggiornata a fine giornata: 849/1047, 81%)
-Stessa misura automatica di prima (indirizzo "gestito" = non risponde "sconosciuto"; errori di valore/permesso contano come gestiti).
-Partenza: 459/1047 (44%). Aggiunti oggi: show control broadcast, patch audio, impostazioni video, audio map, object audio per cue.
-Ancora non riconosciuti: 198 (elenco in `docs/osc_non_riconosciuti.txt`): `/cue/.../` per slice marker, playlist, mute/solo per canale/oggetto,
-effetti video, `liveAverageLevel`, `rotate`, `gang`, `*PatchID/Name/Number`, `objectLevel(s)`, `/update/...`, `/workingDirectory`, `/udpReplyPort`,
-`/overrideWindow`, `/timecodeWindow`.
+## Copertura OSC (misurata: 921 su 1047, 88 per cento)
+Misura automatica: ogni indirizzo del dizionario (1047 modelli) è inviato alla API con tutti i permessi, prima in lettura, poi con
+argomenti finti; "gestito" = riconosciuto in almeno una delle due forme (un errore di valore conta come riconosciuto, "sconosciuta"
+e "non scrivibile" no). Limite: se la forma di scrittura esiste ma la lettura no, l'indirizzo conta come gestito.
+Correzione di una mia svista: durante il lavoro uno script difettoso ha mostrato 1017/1047; era un falso positivo (non contava "non scrivibile").
+Partenza del giorno: 459/1047 (44 per cento).
+Non riconosciuti (126, elenco in `docs/osc_non_riconosciuti.txt`): `/qlab/event` in ingresso (20, sono messaggi che QLab INVIA, non comandi),
+effetti video (`videoEffect*`), `liveAverageLevel` e varianti (richiedono meter in tempo reale), `gang`, `doLevel/doObjectLevel`,
+`parameterValue`, `useSecondColor`, `surfaceName/Size`, `/update/...` (notifiche in uscita, non comandi), `/workingDirectory`,
+`/udpReplyPort`, `/overrideWindow`, `/timecodeWindow`.
 
 ## Fatto (e coperto da test)
 Modello workspace/liste/cart/cue; numerazione; pre-wait/durata/post-wait; continue; armed; colori; second trigger; GO e playhead;
