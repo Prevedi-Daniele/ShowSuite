@@ -125,9 +125,9 @@ class Inspector(QWidget):
         self.params_editor = ParamEditor()
         self.params_editor.changed.connect(self.changed.emit)
         self.tabs.addTab(self.params_editor, "Parametri")
-        from .cue_editors import EnvelopeEditor, LevelsEditor, SliceEditor
+        from .cue_editors import EnvelopeEditor, LevelsEditor, ObjectsEditor, SliceEditor
         self.media_editors = {"Livelli": LevelsEditor(workspace), "Slice": SliceEditor(),
-                              "Envelope": EnvelopeEditor()}
+                              "Envelope": EnvelopeEditor(), "Oggetti": ObjectsEditor(workspace)}
         from .cue_message_editors import FadeEditor, MidiEditor, NetworkEditor
         self.type_editors = {"network": {"Network": NetworkEditor()}, "midi": {"MIDI": MidiEditor()},
                              "fade": {"Fade": FadeEditor()}}
@@ -632,6 +632,8 @@ class CueWindow(QMainWindow):
         view_menu.addAction("Active Cues", lambda: self._show_tool("active"))
         view_menu.addAction("Avvisi", lambda: self._show_tool("warnings"))
         view_menu.addAction("Light Dashboard", self.open_light_dashboard)
+        edit_find = self.menuBar().addMenu("Cerca")
+        edit_find.addAction("Find…", self.open_find, QKeySequence("Ctrl+F"))
         edit_menu = self.menuBar().addMenu("Modifica")
         edit_menu.addAction("Annulla", self.undo)
         edit_menu.addAction("Ripeti", self.redo)
@@ -965,6 +967,27 @@ class CueWindow(QMainWindow):
             self.tool_windows["light"] = existing
         existing.show()
         existing.raise_()
+
+    def open_find(self) -> None:
+        from .cue_find import FindWindow
+        existing = self.tool_windows.get("find")
+        if existing is None or existing.workspace is not self.workspace:
+            existing = FindWindow(self.workspace)
+            existing.cue_chosen.connect(self.select_cue_by_id)
+            self.tool_windows["find"] = existing
+        existing.search()
+        existing.show()
+        existing.raise_()
+        existing.query.setFocus()
+
+    def select_cue_by_id(self, unique_id: str) -> None:
+        item = self._items.get(unique_id)
+        if item is None:
+            return
+        self.tree.clearSelection()
+        item.setSelected(True)
+        self.tree.setCurrentItem(item)
+        self.tree.scrollToItem(item)
 
     def open_audio_map_editor(self) -> None:
         from .cue_audiomap_editor import AudioMapEditor

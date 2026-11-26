@@ -353,3 +353,109 @@ class EnvelopeEditor(QWidget):
         if row >= 0:
             self.table.removeRow(row)
             self._store()
+
+
+class ObjectsEditor(QWidget):
+    """Object audio del cue: mappa scelta e un oggetto per riga (canale del file, nome, oggetto della mappa o x/y/spread)."""
+    changed = Signal()
+    COLUMNS = ["Canale file", "Nome", "Oggetto mappa", "X", "Y", "Spread"]
+
+    def __init__(self, workspace=None):
+        super().__init__()
+        self.workspace = workspace
+        self.cue: Cue | None = None
+        self._loading = False
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        from PySide6.QtWidgets import QComboBox
+        self.map_box = QComboBox()
+        self.map_box.currentIndexChanged.connect(self._map_chosen)
+        form.addRow("Mappa", self.map_box)
+        layout.addLayout(form)
+        self.table = QTableWidget(0, len(self.COLUMNS))
+        self.table.setHorizontalHeaderLabels(self.COLUMNS)
+        self.table.itemChanged.connect(self._cell_changed)
+        layout.addWidget(self.table)
+        buttons = QHBoxLayout()
+        self.add_button = QPushButton("+ Oggetto")
+        self.add_button.clicked.connect(self.add_object)
+        self.remove_button = QPushButton("- Oggetto")
+        self.remove_button.clicked.connect(self.remove_object)
+        buttons.addWidget(self.add_button)
+        buttons.addWidget(self.remove_button)
+        layout.addLayout(buttons)
+
+    def maps(self) -> list:
+        return self.workspace.patches.get("audio_map", []) if self.workspace is not None else []
+
+    def load(self, cue: Cue | None) -> None:
+        self._loading = True
+        self.cue = cue
+        self.map_box.clear()
+        self.map_box.addItem("(nessuna)", "")
+        for audio_map in self.maps():
+            self.map_box.addItem(audio_map["name"], audio_map["unique_id"])
+        if cue is not None:
+            from ..cue.audiomap import find_map
+            found = find_map(self.maps(), str(cue.params.get("audio_map", "")))
+            index = self.map_box.findData(found["unique_id"]) if found is not None else 0
+            self.map_box.setCurrentIndex(max(0, index))
+        self._fill_table()
+        self._loading = False
+
+    def _fill_table(self) -> None:
+        self.table.blockSignals(True)
+        objects = self.cue.params.get("objects", []) if self.cue is not None else []
+        self.table.setRowCount(len(objects))
+        for row, entry in enumerate(objects):
+            values = [entry.get("channel", row + 1), entry.get("name", ""), entry.get("map_object", ""),
+                      entry.get("x", 0.0), entry.get("y", 0.0), entry.get("spread", 0.0)]
+            for column, value in enumerate(values):
+                self.table.setItem(row, column, QTableWidgetItem(str(value)))
+        self.table.blockSignals(False)
+
+    def _map_chosen(self) -> None:
+        if self._loading == True or self.cue is None:
+            return
+        self.cue.params["audio_map"] = self.map_box.currentData() or ""
+        self.changed.emit()
+
+    def add_object(self) -> None:
+        if self.cue is None:
+            return
+        objects = self.cue.params.setdefault("objects", [])
+        number = len(objects) + 1
+        objects.append({"channel": number, "name": "Obj " + str(number), "map_object": "", "x": 0.0, "y": 0.0,
+                        "spread": 0.0})
+        self._fill_table()
+        self.changed.emit()
+
+    def remove_object(self) -> None:
+        if self.cue is None:
+            return
+        row = self.table.currentRow()
+        objects = self.cue.params.get("objects", [])
+        if 0 <= row < len(objects):
+            del objects[row]
+            self._fill_table()
+            self.changed.emit()
+
+    def _cell_changed(self, item: QTableWidgetItem) -> None:
+        if self._loading == True or self.cue is None:
+            return
+        objects = self.cue.params.get("objects", [])
+        if not 0 <= item.row() < len(objects):
+            return
+        entry = objects[item.row()]
+        key = ("channel", "name", "map_object", "x", "y", "spread")[item.column()]
+        try:
+            if key == "channel":
+                entry[key] = max(1, int(item.text()))
+            elif key in ("x", "y", "spread"):
+                entry[key] = float(item.text().replace(",", "."))
+            else:
+                entry[key] = item.text()
+        except ValueError:
+            self._fill_table()
+            return
+        self.changed.emit()

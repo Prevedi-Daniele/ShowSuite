@@ -98,7 +98,7 @@ def test_inspector_mostra_le_schede_solo_per_cue_audio():
     inspector = Inspector(workspace)
     inspector.load(cue)
     titles = [inspector.tabs.tabText(index) for index in range(inspector.tabs.count())]
-    assert titles[-3:] == ["Livelli", "Slice", "Envelope"]
+    assert titles[-4:] == ["Livelli", "Slice", "Envelope", "Oggetti"]
     other = workspace.new_cue("wait")
     inspector.load(other)
     assert inspector.tabs.count() == 3
@@ -173,3 +173,30 @@ def test_inspector_schede_per_tipo():
     for cue_type, title in ((TYPE_NETWORK, "Network"), (TYPE_MIDI, "MIDI"), (TYPE_FADE, "Fade")):
         inspector.load(workspace.new_cue(cue_type))
         assert inspector.tabs.tabText(inspector.tabs.count() - 1) == title
+
+
+def test_objects_editor_mappa_e_oggetti():
+    from showsuite.cue import audiomap
+    from showsuite.cue.model import Workspace, TYPE_AUDIO
+    from showsuite.ui.cue_editors import ObjectsEditor
+    workspace = Workspace("O")
+    audio_map = audiomap.new_map("Sala")
+    workspace.patches["audio_map"] = [audio_map]
+    cue = workspace.new_cue(TYPE_AUDIO)
+    editor = ObjectsEditor(workspace)
+    editor.load(cue)
+    assert editor.map_box.count() == 2
+    editor.map_box.setCurrentIndex(1)
+    assert cue.params["audio_map"] == audio_map["unique_id"]
+    editor.add_object()
+    editor.table.item(0, 2).setText("A")
+    editor.table.item(0, 3).setText("12,5")
+    entry = cue.params["objects"][0]
+    assert entry["map_object"] == "A" and entry["x"] == 12.5
+    editor.table.item(0, 4).setText("abc")
+    assert entry["y"] == 0.0 and editor.table.item(0, 4).text() == "0.0"
+    editor.table.setCurrentCell(0, 0)
+    editor.remove_object()
+    assert cue.params["objects"] == []
+    editor.load(cue)
+    assert editor.map_box.currentData() == audio_map["unique_id"]
