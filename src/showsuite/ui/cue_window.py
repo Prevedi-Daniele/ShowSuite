@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDia
 
 from ..cue.engine import ManualClock, Runtime, SystemClock
 from ..cue.model import (CONTINUE_AUTO_CONTINUE, CONTINUE_AUTO_FOLLOW, CONTINUE_NONE, COLORS, CUE_TYPES,
-                         DuplicateNumberError, InvalidNumberError, TYPE_CART, TYPE_GROUP, Cue, Workspace)
+                         DuplicateNumberError, GROUP_TIMELINE, InvalidNumberError, TYPE_CART, TYPE_GROUP, Cue, Workspace)
 from ..cue.playback import INFINITE
 from ..cue.services import Services
 from ..cue.timeutil import format_time, parse_time
@@ -131,6 +131,9 @@ class Inspector(QWidget):
         from .cue_message_editors import FadeEditor, MidiEditor, NetworkEditor
         self.type_editors = {"network": {"Network": NetworkEditor()}, "midi": {"MIDI": MidiEditor()},
                              "fade": {"Fade": FadeEditor()}}
+        from .cue_timeline import TimelineEditor
+        self.timeline_editor = TimelineEditor()
+        self.timeline_editor.changed.connect(self._touch)
         for editor in self.media_editors.values():
             editor.changed.connect(self._touch)
         for group in self.type_editors.values():
@@ -308,6 +311,9 @@ class Inspector(QWidget):
             for title, editor in self.media_editors.items():
                 editor.load(cue)
                 self.tabs.addTab(editor, title)
+        if cue.cue_type == "group" and cue.group_mode() == GROUP_TIMELINE:
+            self.timeline_editor.load(cue)
+            self.tabs.addTab(self.timeline_editor, "Timeline")
         for title, editor in self.type_editors.get(cue.cue_type, {}).items():
             editor.load(cue)
             self.tabs.addTab(self._top_aligned(editor) if title != "Fade" else editor, title)

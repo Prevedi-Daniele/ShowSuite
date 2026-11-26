@@ -37,7 +37,7 @@ video compositor (stage/regioni/route, maschere, edge blend, warp a 4 angoli, la
 - Liste di OSC `/cue/.../` mancanti per tutti i tipi: marker di slice (`sliceMarker`, `addSliceMarker`...), `playlist`, `mute/solo` per canale/oggetto,
   `liveAverageLevel`, `videoEffect*`, `rotate`, `gang`, `expand/collapse`, `tempDuration`, `soloCueInTime`, `fadeEntries`, `parameterValue(s)`,
   `valuesForKeysWithArguments`, `surface*`/`stage*`, `*PatchID/Name/Number`.
-- UI: editor matrice/envelope/slice, editor Fade/Network/MIDI dedicati, editor Timeline, Light Dashboard, Workspace Status e Timecode Status (cap. 4),
+- UI: fatti editor matrice/envelope/slice, Fade/Network/MIDI e Timeline (barre trascinabili, ma playhead non collegato al tempo reale, nessuna selezione multipla). Mancano: Audio Map Editor grafico, Light Dashboard, Workspace Status e Timecode Status (cap. 4),
   Find e Paste Cue Properties (3.2-3.3), finestra Monitor e Audition (3.5-3.6) in UI, Override Controls in UI, Launcher (3.4), tasti rapidi completi (1.5).
 - Video: effetti video (6.7), warp a griglia/Bézier, Mic cue e ingressi, preserve pitch, plugin effetti audio (solo EQ/filtri/delay), uscita LTC reale su scheda audio.
 - Collaborazione multiutente (8.1) e Workspace Templates (2.3).
