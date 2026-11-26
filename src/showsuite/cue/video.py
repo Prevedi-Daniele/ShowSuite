@@ -13,6 +13,7 @@ import math
 import cv2
 import numpy as np
 
+from .geometry import euler_to_quaternion  # noqa: F401  (riesportata per compatibilità)
 from .engine import ActionHandler, CueState, Runtime
 from .model import TYPE_CAMERA, TYPE_TEXT, TYPE_VIDEO, Cue
 
@@ -24,14 +25,6 @@ def quaternion_to_matrix(quaternion) -> np.ndarray:
     return np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
                      [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
                      [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
-
-
-def euler_to_quaternion(x_degrees: float, y_degrees: float, z_degrees: float) -> list[float]:
-    cx, sx = math.cos(math.radians(x_degrees) / 2), math.sin(math.radians(x_degrees) / 2)
-    cy, sy = math.cos(math.radians(y_degrees) / 2), math.sin(math.radians(y_degrees) / 2)
-    cz, sz = math.cos(math.radians(z_degrees) / 2), math.sin(math.radians(z_degrees) / 2)
-    return [cx * cy * cz + sx * sy * sz, sx * cy * cz - cx * sy * sz, cx * sy * cz + sx * cy * sz,
-            cx * cy * sz - sx * sy * cz]
 
 
 class FrameSink:

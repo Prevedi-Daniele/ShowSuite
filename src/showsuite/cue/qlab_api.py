@@ -9,7 +9,7 @@ import re
 import time
 
 from .engine import ORIGIN_OSC, Runtime
-from .model import (COLORS, CUE_TYPES, TYPE_CART, TYPE_LIST, TYPE_GROUP, Cue, DuplicateNumberError,
+from .model import (GROUP_PLAYLIST, COLORS, CUE_TYPES, TYPE_CART, TYPE_LIST, TYPE_GROUP, Cue, DuplicateNumberError,
                     InvalidNumberError)
 from .osc import Impulse, has_wildcard, pattern_matches
 from .playback import INFINITE
@@ -117,6 +117,10 @@ ACTIONS = ["go", "start", "startAndAutoloadNext", "stop", "pause", "resume", "to
            "prune", "pruneCommands", "safeSort", "safeSortCommands", "collateAndStart"]
 
 
+CUE_EXTRA_NAMES = ("sliceMarker", "sliceMarkers", "addSliceMarker", "deleteSliceMarker", "deleteSliceMarkers", "playlist", "rotate", "audioOutputPatch", "audioOutputPatchID",
+                   "audioOutputPatchName", "audioOutputPatchNumber", "muteChannels", "soloChannels",
+                   "muteObjects", "soloObjects", "sliderLevel", "sliderLevels", "objectLevel", "objectIDLevel",
+                   "objectLevels")
 BROADCAST_CUE_EVENTS = ("go", "auditionGo", "cue/start", "cue/stop", "playhead")
 BROADCAST_FORMS = ("args", "number", "name", "uniqueID", "type")
 BROADCAST_NO_ARGUMENT_EVENTS = {"pause_all": "pauseAll", "resume_all": "resumeAll", "panic_all": "panicAll",
@@ -543,6 +547,8 @@ class QLabApi:
             working = working[:-1]
         name = working[0]
         subpath = working[1:]
+        if name in CUE_EXTRA_NAMES or (name in ("mute", "solo") and len(subpath) > 0):
+            return self._cue_extras(runtime, cues, parts, arguments, permissions, plural)
         if name in ("audioMap", "audioMapID", "audioMapName", "audioMapNumber", "object", "objectID", "objects"):
             return self._cue_object_audio(runtime, cues, parts, arguments, permissions, plural)
         if name in ACTIONS:
@@ -1405,6 +1411,258 @@ class QLabApi:
         if len(collected) == 1 or plural == False:
             return collected[0]
         return {"status": "ok", "data": [item["data"] for item in collected], "discrete": collected[0]["discrete"]}
+
+    # ------------------------------------------------------------------ proprietà aggiuntive dei cue
+    def _cue_extras(self, runtime: Runtime, cues: list, parts: list, arguments: list, permissions: set,
+                    plural: bool) -> dict:
+        collected = []
+        for cue in cues:
+            collected.append(self._cue_extra_single(runtime, cue, parts, arguments, permissions))
+        if len(collected) == 1 or plural == False:
+            return collected[0]
+        return {"status": "ok", "data": [item["data"] for item in collected], "discrete": collected[0]["discrete"]}
+
+    def _cue_extra_single(self, runtime: Runtime, cue: Cue, parts: list, arguments: list, permissions: set) -> dict:
+        name = parts[0]
+        ok = {"status": "ok", "data": "ok", "discrete": True}
+
+        def read(value):
+            return {"status": "ok", "data": value, "discrete": False}
+
+        increment = 0
+        working = list(parts)
+        if working[-1] in ("+", "-") and len(working) > 1:
+            increment = 1 if working[-1] == "+" else -1
+            working = working[:-1]
+        if working[-1] == "live" and len(working) > 1:
+            working = working[:-1]
+        rest = working[1:]
+        writing = len(arguments) > 0
+        if writing == True:
+            self._need(permissions, "edit")
+        if name in ("addSliceMarker", "deleteSliceMarker", "deleteSliceMarkers"):
+            self._need(permissions, "edit")
+            slices = cue.params.setdefault("slices", [])
+            if name == "deleteSliceMarkers":
+                slices.clear()
+            elif name == "deleteSliceMarker":
+                index = int(to_float(rest[0] if len(rest) > 0 else arguments[0]))
+                if not 0 <= index < len(slices):
+                    raise ApiError("slice marker inesistente")
+                del slices[index]
+            else:
+                when = to_float(arguments[0]) if len(arguments) > 0 else float(runtime.status(cue).get("action_elapsed", 0.0))
+                count = to_int(arguments[1]) if len(arguments) > 1 else 1
+                slices.append({"time": max(0.0, when), "play_count": "inf" if count < 0 else count})
+                slices.sort(key=lambda item: float(item["time"]))
+            return ok
+        if name in ("sliceMarker", "sliceMarkers"):
+            return self._slice_markers(cue, name, rest, arguments, increment, writing)
+        if name == "playlist":
+            return self._playlist_property(runtime, cue, rest, arguments, permissions, writing)
+        if name == "rotate":
+            axes = {"x": 0, "y": 1, "z": 2}
+            if len(rest) != 1 or rest[0] not in axes:
+                raise ApiError("asse non valido")
+            angles = cue.params.setdefault("rotate_euler", [0.0, 0.0, 0.0])
+            if writing == True or increment != 0:
+                value = to_float(arguments[0])
+                angles[axes[rest[0]]] = angles[axes[rest[0]]] + increment * value if increment != 0 else value
+                from .geometry import euler_to_quaternion
+                cue.params["quaternion"] = euler_to_quaternion(*angles)
+                return ok
+            return read(angles[axes[rest[0]]])
+        if name.startswith("audioOutputPatch"):
+            return self._cue_output_patch(runtime, cue, name, rest, arguments, permissions)
+        if name in ("mute", "solo", "muteChannels", "soloChannels", "muteObjects", "soloObjects"):
+            return self._cue_mute_solo(cue, name, rest, arguments, writing)
+        if name in ("sliderLevel", "sliderLevels"):
+            levels = cue.params.setdefault("levels", {})
+            if name == "sliderLevels":
+                return read({key: value for key, value in levels.items() if key == "main" or key.startswith("slider/")})
+            if len(rest) == 1 or (len(rest) == 0 and writing == True and len(arguments) == 2):
+                channel = int(to_float(rest[0] if len(rest) == 1 else arguments[0]))
+                values = arguments if len(rest) == 1 else arguments[1:]
+            else:
+                raise ApiError("manca il canale")
+            key = "main" if channel == 0 else "slider/%d" % channel
+            if len(values) > 0:
+                levels[key] = -200.0 if isinstance(values[0], str) else to_float(values[0])
+                return ok
+            return read(levels.get(key, 0.0))
+        if name in ("objectLevel", "objectIDLevel", "objectLevels"):
+            levels = cue.params.setdefault("object_levels", {})
+            if name == "objectLevels":
+                return read(levels)
+            if len(rest) != 2:
+                raise ApiError("servono riga e oggetto")
+            key = "%d/%s" % (int(to_float(rest[0])), rest[1])
+            if writing == True:
+                levels[key] = -200.0 if isinstance(arguments[0], str) else to_float(arguments[0])
+                return ok
+            return read(levels.get(key, 0.0))
+        raise ApiError("proprietà sconosciuta: " + name)
+
+    @staticmethod
+    def _slice_markers(cue: Cue, name: str, rest: list, arguments: list, increment: int, writing: bool) -> dict:
+        slices = cue.params.setdefault("slices", [])
+        ok = {"status": "ok", "data": "ok", "discrete": True}
+
+        def count_value(item):
+            return -1 if item["play_count"] in ("inf", "infinite") else int(item["play_count"])
+
+        def sort_slices():
+            slices.sort(key=lambda item: float(item["time"]))
+
+        if name == "sliceMarkers":
+            if increment != 0:
+                shift = increment * to_float(arguments[0])
+                for item in slices:
+                    item["time"] = max(0.0, float(item["time"]) + shift)
+                return ok
+            if writing == True:
+                raise ApiError("sliceMarkers si scrive solo con + o -")
+            return {"status": "ok", "discrete": False,
+                    "data": json.dumps([{"time": item["time"], "playCount": count_value(item)} for item in slices])}
+        values = list(arguments)
+        if len(rest) == 0:
+            if len(values) == 0:
+                raise ApiError("manca l'indice")
+            rest = [str(int(to_float(values.pop(0))))]
+        index = int(to_float(rest[0]))
+        if not 0 <= index < len(slices):
+            raise ApiError("slice marker inesistente")
+        field = rest[1] if len(rest) > 1 else ""
+        if len(values) == 0:
+            item = slices[index]
+            if field == "time":
+                return {"status": "ok", "data": item["time"], "discrete": False}
+            if field == "playCount":
+                return {"status": "ok", "data": count_value(item), "discrete": False}
+            return {"status": "ok", "discrete": False,
+                    "data": json.dumps({"time": item["time"], "playCount": count_value(item)})}
+        if field == "time":
+            slices[index]["time"] = max(0.0, to_float(values[0]))
+        elif field == "playCount":
+            slices[index]["play_count"] = "inf" if to_int(values[0]) < 0 else to_int(values[0])
+        else:
+            if len(values) < 2:
+                raise ApiError("servono tempo e play count")
+            slices[index] = {"time": max(0.0, to_float(values[0])),
+                             "play_count": "inf" if to_int(values[1]) < 0 else to_int(values[1])}
+        sort_slices()
+        return ok
+
+    def _playlist_property(self, runtime: Runtime, cue: Cue, rest: list, arguments: list, permissions: set,
+                           writing: bool) -> dict:
+        ok = {"status": "ok", "data": "ok", "discrete": True}
+        if cue.cue_type != "group" or cue.group_mode() != GROUP_PLAYLIST:
+            return ok if writing == True or rest in (["next"], ["previous"]) else {"status": "ok", "data": False,
+                                                                                    "discrete": False}
+        flags = {"doCrossfade": "playlist_crossfade", "doLoop": "playlist_loop", "doShuffle": "playlist_shuffle"}
+        if len(rest) == 1 and rest[0] in flags:
+            if writing == True:
+                cue.params[flags[rest[0]]] = to_bool(arguments[0])
+                return ok
+            return {"status": "ok", "data": cue.params.get(flags[rest[0]], False), "discrete": False}
+        if rest == ["crossfade", "duration"]:
+            if writing == True:
+                value = to_float(arguments[0])
+                if value < 0:
+                    raise ApiError("la durata non può essere negativa")
+                cue.params["playlist_crossfade_duration"] = value
+                return ok
+            return {"status": "ok", "data": cue.params.get("playlist_crossfade_duration", 0.05), "discrete": False}
+        if rest in (["next"], ["previous"]):
+            self._need(permissions, "control")
+            runtime.playlist_step(cue, 1 if rest == ["next"] else -1)
+            return ok
+        if rest in (["currentCue"], ["currentCueID"]):
+            current = None
+            for child in runtime._ordered_children(cue):
+                state = runtime.states.get(child.unique_id)
+                if state is not None and state.action_running == True and state.crossfading_out == False:
+                    current = child
+            if writing == True:
+                self._need(permissions, "control")
+                for child in runtime._ordered_children(cue):
+                    if str(arguments[0]) in (child.number, child.unique_id):
+                        runtime.start_cue(child, origin=ORIGIN_OSC)
+                return ok
+            if current is None:
+                return {"status": "ok", "data": "", "discrete": False}
+            return {"status": "ok", "data": current.number if rest == ["currentCue"] else current.unique_id,
+                    "discrete": False}
+        raise ApiError("proprietà sconosciuta: playlist/" + "/".join(rest))
+
+    def _cue_output_patch(self, runtime: Runtime, cue: Cue, name: str, rest: list, arguments: list,
+                          permissions: set) -> dict:
+        patches = self.ensure_patch_ids(runtime)
+        number = int(cue.params.get("audio_output_patch", 1))
+        current = patches[number - 1] if 1 <= number <= len(patches) else None
+        writing = len(arguments) > 0
+        if name == "audioOutputPatch":
+            if current is None:
+                raise ApiError("il cue non è collegato a una patch audio")
+            return self._audio_patch_setting(runtime, ["audio", "patchID", current["unique_id"]] + rest, arguments,
+                                             permissions)
+        if writing == False:
+            data = {"audioOutputPatchID": current["unique_id"] if current else "",
+                    "audioOutputPatchName": current["name"] if current else "none",
+                    "audioOutputPatchNumber": number if current else 0}[name]
+            return {"status": "ok", "data": data, "discrete": False}
+        value = arguments[0]
+        chosen = None
+        if name == "audioOutputPatchNumber":
+            if int(to_float(value)) == 0:
+                chosen = 0
+            elif 1 <= int(to_float(value)) <= len(patches):
+                chosen = int(to_float(value))
+        elif str(value) in ("", "none"):
+            chosen = 0
+        else:
+            key = "unique_id" if name == "audioOutputPatchID" else "name"
+            for index, entry in enumerate(patches):
+                if entry.get(key) == str(value):
+                    chosen = index + 1
+        if chosen is not None:
+            cue.params["audio_output_patch"] = chosen
+        return {"status": "ok", "data": "ok", "discrete": True}
+
+    @staticmethod
+    def _cue_mute_solo(cue: Cue, name: str, rest: list, arguments: list, writing: bool) -> dict:
+        kind = "mute" if name.startswith("mute") else "solo"
+        state = cue.params.setdefault(kind + "_outputs", {"channels": [], "objects": []})
+        ok = {"status": "ok", "data": "ok", "discrete": True}
+        if name.endswith("Channels"):
+            return {"status": "ok", "data": sorted(state["channels"]), "discrete": False}
+        if name.endswith("Objects"):
+            return {"status": "ok", "data": list(state["objects"]), "discrete": False}
+        if rest == ["clear"]:
+            state["channels"].clear()
+            state["objects"].clear()
+            return ok
+        if rest[:1] == ["channel"] and rest[1:] == ["clear"]:
+            state["channels"].clear()
+            return ok
+        if rest[:1] == ["object"] and rest[1:] == ["clear"]:
+            state["objects"].clear()
+            return ok
+        if rest[:1] in (["object"], ["objectID"]) and len(rest) == 2:
+            target, group = rest[1], state["objects"]
+        elif rest[:1] == ["channel"] and len(rest) == 2:
+            target, group = int(to_float(rest[1])), state["channels"]
+        elif len(rest) == 1:
+            target, group = int(to_float(rest[0])), state["channels"]
+        else:
+            raise ApiError("proprietà sconosciuta: " + name + "/" + "/".join(rest))
+        if writing == True:
+            if to_bool(arguments[0]) == True and target not in group:
+                group.append(target)
+            elif to_bool(arguments[0]) == False and target in group:
+                group.remove(target)
+            return ok
+        return {"status": "ok", "data": target in group, "discrete": False}
 
     def _cue_map_reference(self, cue: Cue, maps: list, name: str, arguments: list, permissions: set) -> dict:
         current = None

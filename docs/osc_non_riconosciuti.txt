@@ -1,171 +1,99 @@
-/cue/{cue_number}/addSliceMarker  -> proprietà sconosciuta: addSliceMarker
-/cue/{cue_number}/audioInputPatchID  -> proprietà sconosciuta: audioInputPatchID
-/cue/{cue_number}/audioInputPatchName  -> proprietà sconosciuta: audioInputPatchName
-/cue/{cue_number}/audioInputPatchNumber  -> proprietà sconosciuta: audioInputPatchNumber
-/cue/{cue_number}/audioMapTargetID  -> proprietà sconosciuta: audioMapTargetID
-/cue/{cue_number}/audioOutputPatch  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/cueOutputChannels  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/level/{inChannel}/{outChannel}  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/level/{inChannel}/{outChannel}/live  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/mute  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/mute/clear  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/mute/{output}  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/muteChannels  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/name  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/reset  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/routing  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/routing/reset  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/solo  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/solo/clear  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/solo/{output}  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/soloChannels  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatch/uniqueID  -> proprietà sconosciuta: audioOutputPatch
-/cue/{cue_number}/audioOutputPatchID  -> proprietà sconosciuta: audioOutputPatchID
-/cue/{cue_number}/audioOutputPatchName  -> proprietà sconosciuta: audioOutputPatchName
-/cue/{cue_number}/audioOutputPatchNumber  -> proprietà sconosciuta: audioOutputPatchNumber
-/cue/{cue_number}/audioTrackFormats  -> proprietà sconosciuta: audioTrackFormats
-/cue/{cue_number}/byteCombo  -> proprietà sconosciuta: byteCombo
-/cue/{cue_number}/canHaveAudioMapTargets  -> proprietà sconosciuta: canHaveAudioMapTargets
-/cue/{cue_number}/canHavePatchTargets  -> proprietà sconosciuta: canHavePatchTargets
-/cue/{cue_number}/collapse  -> proprietà sconosciuta: collapse
-/cue/{cue_number}/currentCueTargetID  -> proprietà sconosciuta: currentCueTargetID
-/cue/{cue_number}/currentCueTargetNumber  -> proprietà sconosciuta: currentCueTargetNumber
-/cue/{cue_number}/deleteSliceMarker  -> proprietà sconosciuta: deleteSliceMarker
-/cue/{cue_number}/deleteSliceMarker/{index}  -> proprietà sconosciuta: deleteSliceMarker
-/cue/{cue_number}/deleteSliceMarkers  -> proprietà sconosciuta: deleteSliceMarkers
-/cue/{cue_number}/doLevel  -> proprietà sconosciuta: doLevel
-/cue/{cue_number}/doLevel/{row}/{column}  -> proprietà sconosciuta: doLevel
-/cue/{cue_number}/doObjectIDLevel  -> proprietà sconosciuta: doObjectIDLevel
-/cue/{cue_number}/doObjectIDLevel/{row}/{object}  -> proprietà sconosciuta: doObjectIDLevel
-/cue/{cue_number}/doObjectLevel  -> proprietà sconosciuta: doObjectLevel
-/cue/{cue_number}/doObjectLevel/{row}/{object}  -> proprietà sconosciuta: doObjectLevel
-/cue/{cue_number}/expand  -> proprietà sconosciuta: expand
-/cue/{cue_number}/fadeEntries  -> proprietà sconosciuta: fadeEntries
-/cue/{cue_number}/fillStyle  -> proprietà sconosciuta: fillStyle
-/cue/{cue_number}/framerate  -> proprietà sconosciuta: framerate
-/cue/{cue_number}/frames  -> proprietà sconosciuta: frames
-/cue/{cue_number}/gang  -> proprietà sconosciuta: gang
-/cue/{cue_number}/gang/{inChannel}/{outChannel}  -> proprietà sconosciuta: gang
-/cue/{cue_number}/hours  -> proprietà sconosciuta: hours
-/cue/{cue_number}/inputChannelName/{number}  -> proprietà sconosciuta: inputChannelName
-/cue/{cue_number}/isChildAuditioning  -> proprietà sconosciuta: isChildAuditioning
-/cue/{cue_number}/isNextInPlaylist  -> proprietà sconosciuta: isNextInPlaylist
-/cue/{cue_number}/lastSliceInfiniteLoop  -> proprietà sconosciuta: lastSliceInfiniteLoop
-/cue/{cue_number}/lastSlicePlayCount  -> proprietà sconosciuta: lastSlicePlayCount
-/cue/{cue_number}/liveAverageLevel/{outputChannel}  -> proprietà sconosciuta: liveAverageLevel
-/cue/{cue_number}/liveAverageLevel/{outputChannel}/{low}/{high}  -> proprietà sconosciuta: liveAverageLevel
-/cue/{cue_number}/liveAverageObjectIDLevel/{id}  -> proprietà sconosciuta: liveAverageObjectIDLevel
-/cue/{cue_number}/liveAverageObjectIDLevel/{id}/{low}/{high}  -> proprietà sconosciuta: liveAverageObjectIDLevel
-/cue/{cue_number}/liveAverageObjectLevel/{name}  -> proprietà sconosciuta: liveAverageObjectLevel
-/cue/{cue_number}/liveAverageObjectLevel/{name}/{low}/{high}  -> proprietà sconosciuta: liveAverageObjectLevel
-/cue/{cue_number}/ltcChannel  -> proprietà sconosciuta: ltcChannel
-/cue/{cue_number}/message  -> proprietà sconosciuta: message
-/cue/{cue_number}/messageError  -> proprietà sconosciuta: messageError
-/cue/{cue_number}/midiPatchID  -> proprietà sconosciuta: midiPatchID
-/cue/{cue_number}/midiPatchName  -> proprietà sconosciuta: midiPatchName
-/cue/{cue_number}/minutes  -> proprietà sconosciuta: minutes
-/cue/{cue_number}/moveCartCue/{child}  -> proprietà sconosciuta: moveCartCue
-/cue/{cue_number}/mute  -> proprietà sconosciuta: mute
-/cue/{cue_number}/mute/channel/clear  -> proprietà sconosciuta: mute
-/cue/{cue_number}/mute/channel/{output}  -> proprietà sconosciuta: mute
-/cue/{cue_number}/mute/clear  -> proprietà sconosciuta: mute
-/cue/{cue_number}/mute/object/clear  -> proprietà sconosciuta: mute
-/cue/{cue_number}/mute/object/{name}  -> proprietà sconosciuta: mute
-/cue/{cue_number}/mute/objectID/{id}  -> proprietà sconosciuta: mute
-/cue/{cue_number}/muteChannels  -> proprietà sconosciuta: muteChannels
-/cue/{cue_number}/muteObjects  -> proprietà sconosciuta: muteObjects
-/cue/{cue_number}/networkPatchID  -> proprietà sconosciuta: networkPatchID
-/cue/{cue_number}/networkPatchName  -> proprietà sconosciuta: networkPatchName
-/cue/{cue_number}/numChannelsIn  -> proprietà sconosciuta: numChannelsIn
-/cue/{cue_number}/objectIDLevel/{row}/{id}  -> proprietà sconosciuta: objectIDLevel
-/cue/{cue_number}/objectIDLevel/{row}/{id}/live  -> proprietà sconosciuta: objectIDLevel
-/cue/{cue_number}/objectLevel/{row}/{name}  -> proprietà sconosciuta: objectLevel
-/cue/{cue_number}/objectLevel/{row}/{name}/live  -> proprietà sconosciuta: objectLevel
-/cue/{cue_number}/objectLevels  -> proprietà sconosciuta: objectLevels
-/cue/{cue_number}/objectLevels/live  -> proprietà sconosciuta: objectLevels
-/cue/{cue_number}/outputType  -> proprietà sconosciuta: outputType
-/cue/{cue_number}/parameterFadeEnabled/{index}  -> proprietà sconosciuta: parameterFadeEnabled
-/cue/{cue_number}/parameterFadeEnabled/{key}  -> proprietà sconosciuta: parameterFadeEnabled
-/cue/{cue_number}/parameterFadesEnabled  -> proprietà sconosciuta: parameterFadesEnabled
-/cue/{cue_number}/parameterValue/{index}  -> proprietà sconosciuta: parameterValue
-/cue/{cue_number}/parameterValue/{key}  -> proprietà sconosciuta: parameterValue
-/cue/{cue_number}/parameterValues  -> proprietà sconosciuta: parameterValues
-/cue/{cue_number}/patchList  -> proprietà sconosciuta: patchList
-/cue/{cue_number}/patchTargetID  -> proprietà sconosciuta: patchTargetID
-/cue/{cue_number}/pathSmooth  -> proprietà sconosciuta: pathSmooth
-/cue/{cue_number}/playlist/crossfade/duration  -> proprietà sconosciuta: playlist
-/cue/{cue_number}/playlist/currentCue  -> proprietà sconosciuta: playlist
-/cue/{cue_number}/playlist/currentCueID  -> proprietà sconosciuta: playlist
-/cue/{cue_number}/playlist/doCrossfade  -> proprietà sconosciuta: playlist
-/cue/{cue_number}/playlist/doLoop  -> proprietà sconosciuta: playlist
-/cue/{cue_number}/playlist/doShuffle  -> proprietà sconosciuta: playlist
-/cue/{cue_number}/playlist/next  -> proprietà sconosciuta: playlist
-/cue/{cue_number}/playlist/previous  -> proprietà sconosciuta: playlist
-/cue/{cue_number}/removeLightCommandsMatching  -> proprietà sconosciuta: removeLightCommandsMatching
-/cue/{cue_number}/replaceLightCommand  -> proprietà sconosciuta: replaceLightCommand
-/cue/{cue_number}/rotate/x  -> proprietà sconosciuta: rotate
-/cue/{cue_number}/rotate/x/live  -> proprietà sconosciuta: rotate
-/cue/{cue_number}/rotate/y  -> proprietà sconosciuta: rotate
-/cue/{cue_number}/rotate/y/live  -> proprietà sconosciuta: rotate
-/cue/{cue_number}/rotate/z  -> proprietà sconosciuta: rotate
-/cue/{cue_number}/rotate/z/live  -> proprietà sconosciuta: rotate
-/cue/{cue_number}/secondColorName  -> proprietà sconosciuta: secondColorName
-/cue/{cue_number}/secondColorName/live  -> proprietà sconosciuta: secondColorName
-/cue/{cue_number}/seconds  -> proprietà sconosciuta: seconds
-/cue/{cue_number}/setLight  -> proprietà sconosciuta: setLight
-/cue/{cue_number}/skipIfDisarmed  -> proprietà sconosciuta: skipIfDisarmed
-/cue/{cue_number}/sliceMarker  -> proprietà sconosciuta: sliceMarker
-/cue/{cue_number}/sliceMarker/{index}  -> proprietà sconosciuta: sliceMarker
-/cue/{cue_number}/sliceMarker/{index}/playCount  -> proprietà sconosciuta: sliceMarker
-/cue/{cue_number}/sliceMarker/{index}/time  -> proprietà sconosciuta: sliceMarker
-/cue/{cue_number}/sliderLevel  -> proprietà sconosciuta: sliderLevel
-/cue/{cue_number}/sliderLevel/live  -> proprietà sconosciuta: sliderLevel
-/cue/{cue_number}/sliderLevel/{channel}  -> proprietà sconosciuta: sliderLevel
-/cue/{cue_number}/sliderLevel/{channel}/live  -> proprietà sconosciuta: sliderLevel
-/cue/{cue_number}/sliderLevels  -> proprietà sconosciuta: sliderLevels
-/cue/{cue_number}/sliderLevels/live  -> proprietà sconosciuta: sliderLevels
-/cue/{cue_number}/solo  -> proprietà sconosciuta: solo
-/cue/{cue_number}/solo/channel/clear  -> proprietà sconosciuta: solo
-/cue/{cue_number}/solo/clear  -> proprietà sconosciuta: solo
-/cue/{cue_number}/solo/object/clear  -> proprietà sconosciuta: solo
-/cue/{cue_number}/solo/object/{name}  -> proprietà sconosciuta: solo
-/cue/{cue_number}/solo/objectID/{id}  -> proprietà sconosciuta: solo
-/cue/{cue_number}/solo/{output}  -> proprietà sconosciuta: solo
-/cue/{cue_number}/soloChannels  -> proprietà sconosciuta: soloChannels
-/cue/{cue_number}/soloCueInTime  -> proprietà sconosciuta: soloCueInTime
-/cue/{cue_number}/soloObjects  -> proprietà sconosciuta: soloObjects
-/cue/{cue_number}/stageID  -> proprietà sconosciuta: stageID
-/cue/{cue_number}/stageName  -> proprietà sconosciuta: stageName
-/cue/{cue_number}/stageNumber  -> proprietà sconosciuta: stageNumber
-/cue/{cue_number}/subframes  -> proprietà sconosciuta: subframes
-/cue/{cue_number}/surfaceID  -> proprietà sconosciuta: surfaceID
-/cue/{cue_number}/surfaceList  -> proprietà sconosciuta: surfaceList
-/cue/{cue_number}/surfaceName  -> proprietà sconosciuta: surfaceName
-/cue/{cue_number}/surfaceSize  -> proprietà sconosciuta: surfaceSize
-/cue/{cue_number}/targetMode  -> proprietà sconosciuta: targetMode
-/cue/{cue_number}/tempDuration  -> proprietà sconosciuta: tempDuration
-/cue/{cue_number}/timecodeString  -> proprietà sconosciuta: timecodeString
-/cue/{cue_number}/useSecondColor  -> proprietà sconosciuta: useSecondColor
-/cue/{cue_number}/valuesForKeysWithArguments  -> proprietà sconosciuta: valuesForKeysWithArguments
-/cue/{cue_number}/videoEffect/{name}/delete  -> proprietà sconosciuta: videoEffect
-/cue/{cue_number}/videoEffect/{name}/enabled  -> proprietà sconosciuta: videoEffect
-/cue/{cue_number}/videoEffect/{name}/move  -> proprietà sconosciuta: videoEffect
-/cue/{cue_number}/videoEffect/{name}/parameter/{parameterKey}  -> proprietà sconosciuta: videoEffect
-/cue/{cue_number}/videoEffect/{name}/parameter/{parameterKey}/live  -> proprietà sconosciuta: videoEffect
-/cue/{cue_number}/videoEffect/{name}/parameters  -> proprietà sconosciuta: videoEffect
-/cue/{cue_number}/videoEffect/{name}/parameters/live  -> proprietà sconosciuta: videoEffect
-/cue/{cue_number}/videoEffectIndex/{index}/delete  -> proprietà sconosciuta: videoEffectIndex
-/cue/{cue_number}/videoEffectIndex/{index}/enabled  -> proprietà sconosciuta: videoEffectIndex
-/cue/{cue_number}/videoEffectIndex/{index}/move  -> proprietà sconosciuta: videoEffectIndex
-/cue/{cue_number}/videoEffectIndex/{index}/parameter/{parameterKey}  -> proprietà sconosciuta: videoEffectIndex
-/cue/{cue_number}/videoEffectIndex/{index}/parameter/{parameterKey}/live  -> proprietà sconosciuta: videoEffectIndex
-/cue/{cue_number}/videoEffectIndex/{index}/parameters  -> proprietà sconosciuta: videoEffectIndex
-/cue/{cue_number}/videoEffectIndex/{index}/parameters/live  -> proprietà sconosciuta: videoEffectIndex
-/cue/{cue_number}/videoInputPatchID  -> proprietà sconosciuta: videoInputPatchID
-/cue/{cue_number}/videoInputPatchName  -> proprietà sconosciuta: videoInputPatchName
-/cue/{cue_number}/videoInputPatchNumber  -> proprietà sconosciuta: videoInputPatchNumber
-/cue/{cue_number}/willFade  -> proprietà sconosciuta: willFade
-/cue/{cue_number}/willFade/{row}/{column}  -> proprietà sconosciuta: willFade
+/cue/{cue_number}/audioInputPatchID  -> proprietà non scrivibile: audioInputPatchID
+/cue/{cue_number}/audioInputPatchName  -> proprietà non scrivibile: audioInputPatchName
+/cue/{cue_number}/audioInputPatchNumber  -> proprietà non scrivibile: audioInputPatchNumber
+/cue/{cue_number}/audioMapTargetID  -> proprietà non scrivibile: audioMapTargetID
+/cue/{cue_number}/audioTrackFormats  -> proprietà non scrivibile: audioTrackFormats
+/cue/{cue_number}/byteCombo  -> proprietà non scrivibile: byteCombo
+/cue/{cue_number}/canHaveAudioMapTargets  -> proprietà non scrivibile: canHaveAudioMapTargets
+/cue/{cue_number}/canHavePatchTargets  -> proprietà non scrivibile: canHavePatchTargets
+/cue/{cue_number}/collapse  -> proprietà non scrivibile: collapse
+/cue/{cue_number}/currentCueTargetID  -> proprietà non scrivibile: currentCueTargetID
+/cue/{cue_number}/currentCueTargetNumber  -> proprietà non scrivibile: currentCueTargetNumber
+/cue/{cue_number}/doLevel  -> proprietà non scrivibile: doLevel
+/cue/{cue_number}/doLevel/{row}/{column}  -> proprietà non scrivibile: doLevel
+/cue/{cue_number}/doObjectIDLevel  -> proprietà non scrivibile: doObjectIDLevel
+/cue/{cue_number}/doObjectIDLevel/{row}/{object}  -> proprietà non scrivibile: doObjectIDLevel
+/cue/{cue_number}/doObjectLevel  -> proprietà non scrivibile: doObjectLevel
+/cue/{cue_number}/doObjectLevel/{row}/{object}  -> proprietà non scrivibile: doObjectLevel
+/cue/{cue_number}/expand  -> proprietà non scrivibile: expand
+/cue/{cue_number}/fadeEntries  -> proprietà non scrivibile: fadeEntries
+/cue/{cue_number}/fillStyle  -> proprietà non scrivibile: fillStyle
+/cue/{cue_number}/framerate  -> proprietà non scrivibile: framerate
+/cue/{cue_number}/frames  -> proprietà non scrivibile: frames
+/cue/{cue_number}/gang  -> proprietà non scrivibile: gang
+/cue/{cue_number}/gang/{inChannel}/{outChannel}  -> proprietà non scrivibile: gang
+/cue/{cue_number}/hours  -> proprietà non scrivibile: hours
+/cue/{cue_number}/inputChannelName/{number}  -> proprietà non scrivibile: inputChannelName
+/cue/{cue_number}/isChildAuditioning  -> proprietà non scrivibile: isChildAuditioning
+/cue/{cue_number}/isNextInPlaylist  -> proprietà non scrivibile: isNextInPlaylist
+/cue/{cue_number}/lastSliceInfiniteLoop  -> proprietà non scrivibile: lastSliceInfiniteLoop
+/cue/{cue_number}/lastSlicePlayCount  -> proprietà non scrivibile: lastSlicePlayCount
+/cue/{cue_number}/liveAverageLevel/{outputChannel}  -> proprietà non scrivibile: liveAverageLevel
+/cue/{cue_number}/liveAverageLevel/{outputChannel}/{low}/{high}  -> proprietà non scrivibile: liveAverageLevel
+/cue/{cue_number}/liveAverageObjectIDLevel/{id}  -> proprietà non scrivibile: liveAverageObjectIDLevel
+/cue/{cue_number}/liveAverageObjectIDLevel/{id}/{low}/{high}  -> proprietà non scrivibile: liveAverageObjectIDLevel
+/cue/{cue_number}/liveAverageObjectLevel/{name}  -> proprietà non scrivibile: liveAverageObjectLevel
+/cue/{cue_number}/liveAverageObjectLevel/{name}/{low}/{high}  -> proprietà non scrivibile: liveAverageObjectLevel
+/cue/{cue_number}/ltcChannel  -> proprietà non scrivibile: ltcChannel
+/cue/{cue_number}/message  -> proprietà non scrivibile: message
+/cue/{cue_number}/messageError  -> proprietà non scrivibile: messageError
+/cue/{cue_number}/midiPatchID  -> proprietà non scrivibile: midiPatchID
+/cue/{cue_number}/midiPatchName  -> proprietà non scrivibile: midiPatchName
+/cue/{cue_number}/minutes  -> proprietà non scrivibile: minutes
+/cue/{cue_number}/moveCartCue/{child}  -> proprietà non scrivibile: moveCartCue
+/cue/{cue_number}/mute  -> proprietà non scrivibile: mute
+/cue/{cue_number}/networkPatchID  -> proprietà non scrivibile: networkPatchID
+/cue/{cue_number}/networkPatchName  -> proprietà non scrivibile: networkPatchName
+/cue/{cue_number}/numChannelsIn  -> proprietà non scrivibile: numChannelsIn
+/cue/{cue_number}/outputType  -> proprietà non scrivibile: outputType
+/cue/{cue_number}/parameterFadeEnabled/{index}  -> proprietà non scrivibile: parameterFadeEnabled
+/cue/{cue_number}/parameterFadeEnabled/{key}  -> proprietà non scrivibile: parameterFadeEnabled
+/cue/{cue_number}/parameterFadesEnabled  -> proprietà non scrivibile: parameterFadesEnabled
+/cue/{cue_number}/parameterValue/{index}  -> proprietà non scrivibile: parameterValue
+/cue/{cue_number}/parameterValue/{key}  -> proprietà non scrivibile: parameterValue
+/cue/{cue_number}/parameterValues  -> proprietà non scrivibile: parameterValues
+/cue/{cue_number}/patchList  -> proprietà non scrivibile: patchList
+/cue/{cue_number}/patchTargetID  -> proprietà non scrivibile: patchTargetID
+/cue/{cue_number}/pathSmooth  -> proprietà non scrivibile: pathSmooth
+/cue/{cue_number}/removeLightCommandsMatching  -> proprietà non scrivibile: removeLightCommandsMatch
+/cue/{cue_number}/replaceLightCommand  -> proprietà non scrivibile: replaceLightCommand
+/cue/{cue_number}/secondColorName  -> proprietà non scrivibile: secondColorName
+/cue/{cue_number}/secondColorName/live  -> proprietà non scrivibile: secondColorName
+/cue/{cue_number}/seconds  -> proprietà non scrivibile: seconds
+/cue/{cue_number}/setLight  -> proprietà non scrivibile: setLight
+/cue/{cue_number}/skipIfDisarmed  -> proprietà non scrivibile: skipIfDisarmed
+/cue/{cue_number}/solo  -> proprietà non scrivibile: solo
+/cue/{cue_number}/soloCueInTime  -> proprietà non scrivibile: soloCueInTime
+/cue/{cue_number}/stageID  -> proprietà non scrivibile: stageID
+/cue/{cue_number}/stageName  -> proprietà non scrivibile: stageName
+/cue/{cue_number}/stageNumber  -> proprietà non scrivibile: stageNumber
+/cue/{cue_number}/subframes  -> proprietà non scrivibile: subframes
+/cue/{cue_number}/surfaceID  -> proprietà non scrivibile: surfaceID
+/cue/{cue_number}/surfaceList  -> proprietà non scrivibile: surfaceList
+/cue/{cue_number}/surfaceName  -> proprietà non scrivibile: surfaceName
+/cue/{cue_number}/surfaceSize  -> proprietà non scrivibile: surfaceSize
+/cue/{cue_number}/targetMode  -> proprietà non scrivibile: targetMode
+/cue/{cue_number}/tempDuration  -> proprietà non scrivibile: tempDuration
+/cue/{cue_number}/timecodeString  -> proprietà non scrivibile: timecodeString
+/cue/{cue_number}/useSecondColor  -> proprietà non scrivibile: useSecondColor
+/cue/{cue_number}/valuesForKeysWithArguments  -> proprietà non scrivibile: valuesForKeysWithArgumen
+/cue/{cue_number}/videoEffect/{name}/delete  -> proprietà non scrivibile: videoEffect
+/cue/{cue_number}/videoEffect/{name}/enabled  -> proprietà non scrivibile: videoEffect
+/cue/{cue_number}/videoEffect/{name}/move  -> proprietà non scrivibile: videoEffect
+/cue/{cue_number}/videoEffect/{name}/parameter/{parameterKey}  -> proprietà non scrivibile: videoEffect
+/cue/{cue_number}/videoEffect/{name}/parameter/{parameterKey}/live  -> proprietà non scrivibile: videoEffect
+/cue/{cue_number}/videoEffect/{name}/parameters  -> proprietà non scrivibile: videoEffect
+/cue/{cue_number}/videoEffect/{name}/parameters/live  -> proprietà non scrivibile: videoEffect
+/cue/{cue_number}/videoEffectIndex/{index}/delete  -> proprietà non scrivibile: videoEffectIndex
+/cue/{cue_number}/videoEffectIndex/{index}/enabled  -> proprietà non scrivibile: videoEffectIndex
+/cue/{cue_number}/videoEffectIndex/{index}/move  -> proprietà non scrivibile: videoEffectIndex
+/cue/{cue_number}/videoEffectIndex/{index}/parameter/{parameterKey}  -> proprietà non scrivibile: videoEffectIndex
+/cue/{cue_number}/videoEffectIndex/{index}/parameter/{parameterKey}/live  -> proprietà non scrivibile: videoEffectIndex
+/cue/{cue_number}/videoEffectIndex/{index}/parameters  -> proprietà non scrivibile: videoEffectIndex
+/cue/{cue_number}/videoEffectIndex/{index}/parameters/live  -> proprietà non scrivibile: videoEffectIndex
+/cue/{cue_number}/videoInputPatchID  -> proprietà non scrivibile: videoInputPatchID
+/cue/{cue_number}/videoInputPatchName  -> proprietà non scrivibile: videoInputPatchName
+/cue/{cue_number}/videoInputPatchNumber  -> proprietà non scrivibile: videoInputPatchNumber
 /overrideWindow  -> indirizzo sconosciuto
 /qlab/event/workspace/auditionGo  -> indirizzo sconosciuto
 /qlab/event/workspace/auditionGo/name  -> indirizzo sconosciuto

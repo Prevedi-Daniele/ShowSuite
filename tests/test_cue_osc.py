@@ -401,3 +401,67 @@ def test_cue_audio_map_e_oggetti_propri():
     assert audio_cue.params["audio_map"] == ""
     api.handle("/cue/9/audioMap", [], client)
     assert last_reply(client)[1]["status"] == "error"
+
+
+def test_slice_marker_playlist_rotate_mute_solo_patch_del_cue():
+    import json as json_module
+    from showsuite.cue.model import TYPE_AUDIO
+    workspace, runtime, api, client, cues = make_api()
+    audio_cue = workspace.new_cue(TYPE_AUDIO)
+    audio_cue.number = "9"
+    workspace.patches["audio"] = [{"name": "Sala", "first_channel": 1, "channels": 2},
+                                  {"name": "Foyer", "first_channel": 3, "channels": 2}]
+    api.handle("/cue/9/addSliceMarker", [4.0, 2], client)
+    api.handle("/cue/9/addSliceMarker", [1.0, -1], client)
+    api.handle("/cue/9/sliceMarkers", [], client)
+    listed = json_module.loads(last_reply(client)[1]["data"])
+    assert listed == [{"time": 1.0, "playCount": -1}, {"time": 4.0, "playCount": 2}]
+    api.handle("/cue/9/sliceMarker/1/time", [], client)
+    assert last_reply(client)[1]["data"] == 4.0
+    api.handle("/cue/9/sliceMarker/1/playCount", [3], client)
+    api.handle("/cue/9/sliceMarker/1", [], client)
+    assert json_module.loads(last_reply(client)[1]["data"]) == {"time": 4.0, "playCount": 3}
+    api.handle("/cue/9/sliceMarkers/+", [2.0], client)
+    assert audio_cue.params["slices"][0]["time"] == 3.0
+    api.handle("/cue/9/audioOutputPatchName", ["Foyer"], client)
+    api.handle("/cue/9/audioOutputPatchNumber", [], client)
+    assert last_reply(client)[1]["data"] == 2
+    api.handle("/cue/9/audioOutputPatch/routing", [], client)
+    assert last_reply(client)[1]["data"] == [3, 4]
+    api.handle("/cue/9/audioOutputPatchID", ["none"], client)
+    api.handle("/cue/9/audioOutputPatchName", [], client)
+    assert last_reply(client)[1]["data"] == "none"
+    api.handle("/cue/9/mute/2", [True], client)
+    api.handle("/cue/9/solo/channel/1", [True], client)
+    api.handle("/cue/9/muteChannels", [], client)
+    assert last_reply(client)[1]["data"] == [2]
+    api.handle("/cue/9/solo/clear", [], client)
+    assert audio_cue.params["solo_outputs"]["channels"] == []
+    api.handle("/cue/9/rotate/z", [90], client)
+    assert audio_cue.params["quaternion"][0] == pytest.approx(0.7071, abs=1e-3)
+    api.handle("/cue/9/objectLevel/1/A", [-6], client)
+    api.handle("/cue/9/objectLevels", [], client)
+    assert last_reply(client)[1]["data"] == {"1/A": -6.0}
+    api.handle("/cue/9/sliderLevel/2", [-3], client)
+    api.handle("/cue/9/sliderLevel/2", [], client)
+    assert last_reply(client)[1]["data"] == -3.0
+
+
+def test_playlist_via_osc():
+    from showsuite.cue.model import TYPE_WAIT
+    workspace, runtime, api, client, cues = make_api()
+    first = workspace.new_cue(TYPE_WAIT)
+    second = workspace.new_cue(TYPE_WAIT)
+    first.duration = second.duration = 10.0
+    from showsuite.cue.model import GROUP_PLAYLIST
+    group = workspace.make_group([first, second], GROUP_PLAYLIST)
+    group.number = "20"
+    api.handle("/cue/20/playlist/doLoop", [True], client)
+    api.handle("/cue/20/playlist/doLoop", [], client)
+    assert last_reply(client)[1]["data"] == True
+    api.handle("/cue/20/playlist/crossfade/duration", [1.5], client)
+    assert group.params["playlist_crossfade_duration"] == 1.5
+    api.handle("/cue/20/start", [], client)
+    api.handle("/cue/20/playlist/next", [], client)
+    api.handle("/cue/20/playlist/currentCueID", [], client)
+    assert last_reply(client)[1]["data"] == second.unique_id

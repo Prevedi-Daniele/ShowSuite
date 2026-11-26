@@ -158,7 +158,19 @@ class AudioMixer(ActionHandler):
                 if 0 <= row < file_channels and 0 <= column < self.output_channels:
                     matrix[row, column] = db_to_gain(float(levels[key]))
         self._apply_objects(cue, matrix, file_channels, patch_first)
+        self._apply_cue_mute_solo(cue, matrix, patch_first)
         return matrix * np.float32(db_to_gain(float(main) + trim))
+
+    def _apply_cue_mute_solo(self, cue: Cue, matrix: np.ndarray, patch_first: int) -> None:
+        """Mute/solo delle uscite cue (numeri da 1) impostati sul cue."""
+        muted = {int(value) for value in cue.params.get("mute_outputs", {}).get("channels", [])}
+        soloed = {int(value) for value in cue.params.get("solo_outputs", {}).get("channels", [])}
+        for column in range(matrix.shape[1]):
+            output = column - patch_first + 1
+            if output < 1:
+                continue
+            if output in muted or (len(soloed) > 0 and output not in soloed):
+                matrix[:, column] = 0.0
 
     def _apply_objects(self, cue: Cue, matrix: np.ndarray, file_channels: int, patch_first: int) -> None:
         """Instradamento da object audio: ogni oggetto del cue prende un canale del file e lo distribuisce alle
@@ -181,12 +193,13 @@ class AudioMixer(ActionHandler):
                     if map_object["name"] == entry["map_object"]:
                         x, y, spread = map_object["x"], map_object["y"], map_object["spread"]
             matrix[row, :] = 0.0
+            object_gain = db_to_gain(float(cue.params.get("object_levels", {}).get("%d/%s" % (row + 1, entry.get("name", "")), 0.0)))
             levels = object_levels(audio_map, x, y, spread)
             main_gain = db_to_gain(levels[0]) if 0 in levels else 1.0
             for output, decibel in levels.items():
                 column = patch_first + output - 1
                 if output >= 1 and 0 <= column < self.output_channels:
-                    matrix[row, column] = matrix[row, column] + np.float32(db_to_gain(decibel) * main_gain)
+                    matrix[row, column] = matrix[row, column] + np.float32(db_to_gain(decibel) * main_gain * object_gain)
 
     def _patch_first(self, cue: Cue) -> int:
         patches = self.runtime.workspace.patches["audio"]
