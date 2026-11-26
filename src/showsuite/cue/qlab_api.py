@@ -186,6 +186,7 @@ class QLabApi:
             for form in BROADCAST_FORMS if event in BROADCAST_CUE_EVENTS else ("args",):
                 if (event, form) not in session.subscriptions:
                     continue
+                runtime.logs.add("osc_out", "/qlab/event/workspace/%s %s %s" % (event, form, " ".join(str(item) for item in arguments)))
                 self._send_broadcast(session, event, form, arguments)
 
     @staticmethod
@@ -298,6 +299,9 @@ class QLabApi:
         session = self._session_for(client)
         if address.startswith("/reply/"):
             return
+        from .logs import format_arguments
+        for runtime in self.runtimes:
+            runtime.logs.add("osc_in", (address + " " + format_arguments(arguments)).strip())
         replies = self.process(address, arguments, session)
         for reply in replies:
             self._send_reply(client, session, reply)
@@ -305,6 +309,8 @@ class QLabApi:
     def _send_reply(self, client, session: Session, reply: dict) -> None:
         if reply["status"] == "ok" and reply.get("discrete", False) == True and session.always_reply == False:
             return
+        for runtime in self.runtimes:
+            runtime.logs.add("osc_out", "/reply" + str(reply.get("sent_address", "")) + " " + str(reply["status"]))
         payload = {"address": reply["address"], "status": reply["status"], "data": reply["data"]}
         if reply.get("workspace_id", "") != "":
             payload["workspace_id"] = reply["workspace_id"]

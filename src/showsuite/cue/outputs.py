@@ -99,6 +99,8 @@ class OutputHub:
             return
         settings = self.runtime.workspace.settings
         self.network_sent.append((kind, host, port, payload))
+        if kind == "osc":
+            self.runtime.logs.add("osc_out", "%s:%d %s %s" % (host, port, address, " ".join(str(item) for item in (arguments or []))))
         if local == True and self.api is not None and kind == "osc" and port == int(settings.get("osc_port", 53000)):
             # localhost sull'OSC del workspace stesso: non esce dall'applicazione
             from .qlab_api import Session

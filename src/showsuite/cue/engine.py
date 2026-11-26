@@ -222,6 +222,8 @@ class Runtime:
         self.selection: list[str] = []
         self.listeners: list = []
         self.log: list = []
+        from .logs import WorkspaceLogs
+        self.logs = WorkspaceLogs(workspace)
         self.script_output: list[str] = []
         self.light_bridge = None
         self.lock = threading.RLock()

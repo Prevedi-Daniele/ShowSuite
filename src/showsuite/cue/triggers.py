@@ -57,7 +57,8 @@ class TriggerManager:
     def _cues_with(self, key: str) -> list[Cue]:
         return [cue for cue in self.runtime.workspace.all_cues() if cue.triggers.get(key)]
 
-    def _fire(self, cue: Cue) -> None:
+    def _fire(self, cue: Cue, source: str = "") -> None:
+        self.runtime.logs.add("trigger", "%s avviato da trigger %s" % (cue.number + " " + cue.name, source))
         if self.runtime.workspace.settings.get("show_mode", False) == False or True:
             self.runtime.start_cue(cue, origin=ORIGIN_TRIGGER)
 
@@ -69,7 +70,7 @@ class TriggerManager:
                 for cue in self._cues_with("hotkey"):
                     if cue.triggers["hotkey"] == sequence:
                         self.held_keys[sequence] = cue
-                        self._fire(cue)
+                        self._fire(cue, "hotkey " + sequence)
                         fired.append(cue)
             else:
                 cue = self.held_keys.pop(sequence, None)
@@ -81,6 +82,7 @@ class TriggerManager:
     def midi_in(self, data: bytes) -> list[Cue]:
         fired = []
         settings = self.runtime.workspace.settings
+        self.runtime.logs.add("midi_in", data.hex(" "))
         with self.runtime.lock:
             if data[:1] == b"\xF0":
                 if settings["overrides"].get("mscInput", True) == False:
@@ -95,7 +97,7 @@ class TriggerManager:
                 if match_midi_trigger(trigger, data):
                     if (data[0] & 0xF0) == 0x80 or ((data[0] & 0xF0) == 0x90 and len(data) > 2 and data[2] == 0):
                         continue
-                    self._fire(cue)
+                    self._fire(cue, "MIDI")
                     fired.append(cue)
         return fired
 
@@ -173,7 +175,7 @@ class TriggerManager:
                 if self.last_wall_second.get(cue.unique_id) == stamp:
                     continue
                 self.last_wall_second[cue.unique_id] = stamp
-                self._fire(cue)
+                self._fire(cue, "wall clock")
                 fired.append(cue)
         return fired
 
@@ -230,7 +232,7 @@ class TriggerManager:
             moment = timecode_to_seconds(hours, minutes, seconds, frames, format_index)
             above = moment >= low - 1e-9 if include_low == True else moment > low + 1e-9
             if above == True and moment <= high + 1e-9:
-                self._fire(cue)
+                self._fire(cue, "timecode")
                 fired.append(cue)
         return fired
 

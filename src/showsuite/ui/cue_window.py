@@ -634,6 +634,7 @@ class CueWindow(QMainWindow):
         view_menu.addAction("Active Cues", lambda: self._show_tool("active"))
         view_menu.addAction("Avvisi", lambda: self._show_tool("warnings"))
         view_menu.addAction("Light Dashboard", self.open_light_dashboard)
+        view_menu.addAction("Workspace Status", self.open_status, QKeySequence("Ctrl+Shift+W"))
         view_menu.addAction("Override Controls", lambda: self._show_simple_tool("override"), QKeySequence("Ctrl+Shift+O"))
         view_menu.addAction("Timecode Status", lambda: self._show_simple_tool("timecode"))
         edit_find = self.menuBar().addMenu("Cerca")
@@ -971,6 +972,17 @@ class CueWindow(QMainWindow):
         if existing is None or existing.bridge is not bridge:
             existing = LightDashboardWindow(bridge)
             self.tool_windows["light"] = existing
+        existing.show()
+        existing.raise_()
+
+    def open_status(self) -> None:
+        from .cue_status import WorkspaceStatusWindow
+        existing = self.tool_windows.get("status")
+        if existing is None or existing.runtime is not self.runtime:
+            existing = WorkspaceStatusWindow(self.runtime)
+            existing.triggers.cue_chosen.connect(self.select_cue_by_id)
+            self.tool_windows["status"] = existing
+        existing.refresh_all()
         existing.show()
         existing.raise_()
 
